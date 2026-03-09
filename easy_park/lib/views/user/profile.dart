@@ -85,37 +85,19 @@ class _ProfileState extends State<Profile> {
   String _buildProfileImageUrl(String? profileImageUrl) {
   if (profileImageUrl == null || profileImageUrl.isEmpty) return '';
 
-  // Sudah URL lengkap, langsung return
   if (profileImageUrl.startsWith('http://') || profileImageUrl.startsWith('https://')) {
     return profileImageUrl;
   }
 
-  const String baseUrl = 'https://webfw23.myhost.id/gol_bws3';
+  // Hapus slash di awal jika ada
+  String cleanPath = profileImageUrl.replaceAll(RegExp(r'^/+'), '');
 
-  String cleanPath = profileImageUrl;
-
-  // Hapus prefix "public/" jika ada
-  if (cleanPath.startsWith('/public/')) {
+  // Hapus prefix "storage/" jika sudah ada
+  if (cleanPath.startsWith('storage/')) {
     cleanPath = cleanPath.substring(8);
-  } else if (cleanPath.startsWith('public/')) {
-    cleanPath = cleanPath.substring(7);
   }
 
-  // Hindari "storage/" ganda
-  cleanPath = cleanPath.replaceFirst(RegExp(r'^storage/'), '');
-
-  // Ganti "users" jadi "mahasiswa"
-  cleanPath = cleanPath.replaceFirst('uploads/users/', 'uploads/mahasiswa/');
-
-  // Tambahkan prefix /storage jika perlu
-  cleanPath = 'storage/$cleanPath';
-
-  // Pastikan diawali dengan /
-  if (!cleanPath.startsWith('/')) {
-    cleanPath = '/$cleanPath';
-  }
-
-  return '$baseUrl/public$cleanPath';
+  return '$baseUrl/storage/$cleanPath';
 }
 
 

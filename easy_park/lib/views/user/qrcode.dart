@@ -57,104 +57,36 @@ class _QRCodeState extends State<QRCode> with WidgetsBindingObserver {
     return qrCodeUrl;
   }
 
-  const String baseUrl = 'https://webfw23.myhost.id/gol_bws3';
-
-  // Bersihkan URL dari berbagai prefix yang mungkin ada
-  String sanitizedPath = qrCodeUrl;
+  const String baseUrl = 'http://192.168.106.65:8000';
   
-  // Hapus semua kemungkinan prefix /public
-  while (sanitizedPath.startsWith('/public/') || sanitizedPath.startsWith('public/')) {
-    if (sanitizedPath.startsWith('/public/')) {
-      sanitizedPath = sanitizedPath.replaceFirst('/public/', '/');
-    } else if (sanitizedPath.startsWith('public/')) {
-      sanitizedPath = sanitizedPath.replaceFirst('public/', '');
-    }
-  }
+  // Hapus slash di awal jika ada
+  String cleanPath = qrCodeUrl.replaceAll(RegExp(r'^/+'), '');
   
-  // Pastikan path dimulai dengan /
-  if (!sanitizedPath.startsWith('/')) {
-    sanitizedPath = '/$sanitizedPath';
-  }
-  
-  // Gabungkan dengan base URL dan tambahkan /public
-  return '$baseUrl/public$sanitizedPath';
+  return '$baseUrl/storage/$cleanPath';
 }
 
 
 
-  Widget _buildQRCodeWidget(String qrCodeUrl) {
-    final fullUrl = _buildFullQrCodeUrl(qrCodeUrl);
-    print('Full QR URL: $fullUrl'); // Debug full URL
+Widget _buildQRCodeWidget(String qrCodeUrl) {
+  final fullUrl = _buildFullQrCodeUrl(qrCodeUrl);
+  print('=== FULL QR URL: $fullUrl ===');
 
-    // Cek apakah file SVG
-    if (fullUrl.toLowerCase().endsWith('.svg')) {
-      return SvgPicture.network(
-        fullUrl,
-        width: 200,
-        height: 200,
-        fit: BoxFit.contain,
-        placeholderBuilder: (context) => Container(
-          width: 200,
-          height: 200,
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-        // Error handler untuk SVG
-        // Note: flutter_svg mungkin tidak memiliki errorBuilder
-        // Jadi kita akan wrap dengan fallback
-      );
-    } else {
-      // Untuk file PNG/JPG
-      return Image.network(
-        fullUrl,
-        width: 200,
-        height: 200,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          print('Image load error: $error');
-          return Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.red),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error, color: Colors.red, size: 40),
-                SizedBox(height: 8),
-                Text(
-                  'Gagal memuat QR Code',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.red),
-                ),
-              ],
-            ),
-          );
-        },
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        },
-      );
-    }
-  }
+  return SvgPicture.network(
+    fullUrl,
+    width: 200,
+    height: 200,
+    fit: BoxFit.contain,
+    placeholderBuilder: (context) => Container(
+      width: 200,
+      height: 200,
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Center(child: CircularProgressIndicator()),
+    ),
+  );
+}
 
   @override
   void dispose() {

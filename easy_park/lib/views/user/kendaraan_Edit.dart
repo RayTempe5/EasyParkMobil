@@ -50,17 +50,17 @@ class _VehicleEditScreenState extends State<VehicleEditScreen> {
 
   // Function to configure STNK URL properly
   String? _configureStnkUrl(String? rawUrl) {
-    if (rawUrl == null || rawUrl.isEmpty) {
-      return null;
-    }
-
-    // Deteksi kalau belum ada "public/"
-    if (!rawUrl.contains('public/')) {
-      return 'https://webfw23.myhost.id/gol_bws3/public/storage/$rawUrl';
-    } else {
-      return 'https://webfw23.myhost.id/gol_bws3/storage/$rawUrl';
-    }
+  if (rawUrl == null || rawUrl.isEmpty) {
+    return null;
   }
+
+  // Kalau sudah full URL, return langsung
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return rawUrl;
+  }
+
+  return '$baseUrl/storage/$rawUrl';
+}
 
   Future<void> _fetchVehicleTypes() async {
     setState(() {
