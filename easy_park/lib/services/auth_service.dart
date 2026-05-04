@@ -12,10 +12,10 @@ class AuthService {
     required String name,
     required String email,
     required String password,
-    required String nim,
-    required String fullName,
-    required String dateOfBirth,
-    required String phoneNumber,
+    required String nimNip,     // 'nim_nip' sesuai User model
+    required String phone,      // 'phone' bukan 'phone_number'
+    required String gender,     // 'gender' — in:L,P
+    required String birthDate,  // 'birth_date' bukan 'date_of_birth'
     required String address,
   }) async {
     final url = Uri.parse('$apiBaseUrl/register');
@@ -31,10 +31,10 @@ class AuthService {
           'name': name,
           'email': email,
           'password': password,
-          'nim': nim,
-          'full_name': fullName,
-          'date_of_birth': dateOfBirth,
-          'phone_number': phoneNumber,
+          'nim_nip': nimNip,      // sesuai $fillable User model
+          'phone': phone,          // sesuai $fillable User model
+          'gender': gender,        // sesuai $fillable User model
+          'birth_date': birthDate, // sesuai $fillable User model
           'address': address,
         }),
       );
@@ -45,7 +45,7 @@ class AuthService {
         return {
           'success': true,
           'message': body['message'] ?? 'Registrasi berhasil',
-          'token': body['access_token'],
+          'token': body['token'],  // 'token' bukan 'access_token' sesuai AuthController
           'user': body['user'],
           'redirect_to': body['redirect_to'] ?? '',
         };
@@ -88,14 +88,12 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final user = result['user'];
-        final token = result['access_token'];
-        final role = user['role'];
+        final token = result['token']; // ✅ 'token' bukan 'access_token'
+        final role = user['role'];     // string name dari role relationship
         final redirectTo = _mapRoleToRedirect(role);
 
-        // ✅ Bersihkan kendaraan terpilih sebelumnya (jika ada)
         await SelectedVehicle().clearSelectedVehicle();
 
-        // ✅ Simpan login ke database lokal
         await LocalDbService.saveLogin(
           email: user['email'],
           token: token,
@@ -115,6 +113,7 @@ class AuthService {
         return {
           'success': false,
           'message': result['message'] ?? 'Login gagal',
+          'errors': result['errors'] ?? {},
         };
       }
     } catch (e) {
@@ -131,7 +130,7 @@ class AuthService {
       final token = savedUser?['token'] as String?;
       if (token != null) {
         await http.post(
-          Uri.parse('$apiBaseUrl/logout'),
+          Uri.parse('$apiBaseUrl/logout'), // POST /api/logout sesuai routes
           headers: {
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
@@ -166,9 +165,9 @@ class AuthService {
       final storedUser = jsonDecode(userJson);
       final storedRole = storedUser['role'];
 
-      // Attempt API call to validate token
+      // ✅ '/me' bukan '/user' — sesuai routes api.php
       final response = await http.get(
-        Uri.parse('$apiBaseUrl/user'),
+        Uri.parse('$apiBaseUrl/me'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
@@ -177,46 +176,34 @@ class AuthService {
         return http.Response('Request timed out', 504);
       });
 
-      debugPrint(
-          'API user response: ${response.statusCode} - ${response.body}');
+      debugPrint('API me response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        final user = result['user'] ?? result['data']?['user'];
+
+        // ✅ Response /me: { success: true, user: {...} }
+        final user = result['user'];
         if (user == null) {
           await LocalDbService.deleteLogin();
           return {'success': false, 'message': 'Invalid user data from API'};
         }
 
-        final role = user['role'] ?? storedRole;
+        // role dari /me adalah object karena load('role')
+        // ambil name dari role object atau langsung string
+        final roleData = user['role'];
+        final role = roleData is Map ? roleData['name'] : roleData ?? storedRole;
+
         if (role == null) {
           await LocalDbService.deleteLogin();
           return {'success': false, 'message': 'No role found in user data'};
         }
 
-        String redirectTo;
-        switch (role) {
-          case 'admin':
-            redirectTo = 'adminHome';
-            break;
-          case 'petugas':
-            redirectTo = 'petugasHome';
-            break;
-          case 'mahasiswa':
-            redirectTo = 'Bottom_Navigation';
-            break;
-          default:
-            redirectTo = 'home';
-        }
-
-        // Update LocalDbService with latest user data
         await LocalDbService.saveLogin(
           email: email,
           token: token,
           role: role,
           userJson: jsonEncode(user),
         );
-        debugPrint('Updated LocalDbService: email=$email, role=$role');
 
         return {
           'success': true,
@@ -224,42 +211,24 @@ class AuthService {
           'token': token,
           'user': user,
           'role': role,
-          'redirect_to': redirectTo,
+          'redirect_to': _mapRoleToRedirect(role),
         };
       } else {
-        // Fallback to stored user data if API call fails
-        debugPrint('Falling back to stored user data due to API failure');
         if (storedRole != null) {
-          String redirectTo;
-          switch (storedRole) {
-            case 'admin':
-              redirectTo = 'adminHome';
-              break;
-            case 'petugas':
-              redirectTo = 'petugasHome';
-              break;
-            case 'mahasiswa':
-              redirectTo = 'Bottom_Navigation';
-              break;
-            default:
-              redirectTo = 'home';
-          }
-
           return {
             'success': true,
             'message': 'Auto-login using stored data',
             'token': token,
             'user': storedUser,
             'role': storedRole,
-            'redirect_to': redirectTo,
+            'redirect_to': _mapRoleToRedirect(storedRole),
           };
         }
 
         await LocalDbService.deleteLogin();
         return {
           'success': false,
-          'message':
-              'Invalid or expired token: ${response.statusCode} - ${response.body}',
+          'message': 'Invalid or expired token: ${response.statusCode}',
         };
       }
     } catch (e) {
@@ -272,16 +241,18 @@ class AuthService {
     }
   }
 
+  // ✅ Sesuai ProfileController + User model $fillable
   static Future<Map<String, dynamic>> updateProfile({
     String? name,
     String? email,
-    String? phoneNumber,
+    String? phone,      // 'phone' sesuai $fillable
+    String? nimNip,     // 'nim_nip' sesuai $fillable
+    String? gender,     // 'gender' sesuai $fillable — in:L,P
+    String? birthDate,  // 'birth_date' sesuai $fillable + cast 'date'
     String? address,
-    String? nim,
-    String? fullName, // Add fullName parameter
-    String? dateOfBirth,
   }) async {
-    final url = Uri.parse('$apiBaseUrl/update-profile');
+    // ✅ '/profile/update' sesuai routes api.php
+    final url = Uri.parse('$apiBaseUrl/profile/update');
 
     try {
       final savedUser = await LocalDbService.getLogin();
@@ -296,13 +267,13 @@ class AuthService {
       final data = <String, dynamic>{};
       if (name != null) data['name'] = name;
       if (email != null) data['email'] = email;
-      if (phoneNumber != null) data['phone_number'] = phoneNumber;
+      if (phone != null) data['phone'] = phone;
+      if (nimNip != null) data['nim_nip'] = nimNip;
+      if (gender != null) data['gender'] = gender;
+      if (birthDate != null) data['birth_date'] = birthDate;
       if (address != null) data['address'] = address;
-      if (nim != null) data['nim'] = nim;
-      if (fullName != null) data['full_name'] = fullName; // Send full_name
-      if (dateOfBirth != null) data['date_of_birth'] = dateOfBirth;
 
-      final response = await http.put(
+      final response = await http.post( // ✅ POST sesuai routes
         url,
         headers: {
           'Content-Type': 'application/json',
@@ -317,11 +288,18 @@ class AuthService {
 
       if (response.statusCode == 200) {
         if (body['user'] != null) {
+          final userObj = body['user'];
+          // role dari ProfileController response adalah object (load('role'))
+          final roleData = userObj['role'];
+          final role = roleData is Map
+              ? roleData['name']
+              : savedUser?['role'] ?? 'mahasiswa';
+
           await LocalDbService.saveLogin(
-            email: body['user']['email'] ?? savedUser?['email'] ?? '',
+            email: userObj['email'] ?? savedUser?['email'] ?? '',
             token: token,
-            role: savedUser?['role'] ?? 'mahasiswa',
-            userJson: jsonEncode(body['user']),
+            role: role,
+            userJson: jsonEncode(userObj),
           );
         }
 
@@ -347,28 +325,28 @@ class AuthService {
     }
   }
 
+  // ✅ Upload photo via /profile/update dengan multipart
+  // Tidak ada endpoint terpisah di routes — pakai profile/update
   static Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
     debugPrint('Starting profile image upload...');
-    final url = Uri.parse('$apiBaseUrl/upload-profile-image');
+    final url = Uri.parse('$apiBaseUrl/profile/update'); // ✅ sesuai routes
 
     try {
       final savedUser = await LocalDbService.getLogin();
       final token = savedUser?['token'] as String?;
       if (token == null) {
-        debugPrint('Token not found');
         return {
           'success': false,
           'message': 'Tidak ada token ditemukan. Silakan login ulang.',
         };
       }
 
-      // Check file size (max 5MB)
+      // ✅ max:2048 KB = 2MB sesuai validasi ProfileController
       final fileSize = await imageFile.length();
-      if (fileSize > 5 * 1024 * 1024) {
-        debugPrint('File too large: ${fileSize / 1024} KB');
+      if (fileSize > 2 * 1024 * 1024) {
         return {
           'success': false,
-          'message': 'Ukuran file terlalu besar (maksimum 5MB).',
+          'message': 'Ukuran file terlalu besar (maksimum 2MB).',
         };
       }
 
@@ -379,13 +357,12 @@ class AuthService {
         })
         ..files.add(
           await http.MultipartFile.fromPath(
-            'image',
+            'photo', // ✅ 'photo' sesuai validasi ProfileController
             imageFile.path,
             filename: path.basename(imageFile.path),
           ),
         );
 
-      debugPrint('Sending request...');
       final streamedResponse = await request.send();
       final responseBody = await streamedResponse.stream.bytesToString();
 
@@ -394,33 +371,30 @@ class AuthService {
 
       final body = jsonDecode(responseBody);
 
-      if (streamedResponse.statusCode == 200 ||
-          streamedResponse.statusCode == 201) {
-        String? profilePhotoUrl;
-        if (body['user']?['profile_photo_url'] != null) {
-          profilePhotoUrl = body['user']['profile_photo_url'];
-        } else if (body['profile_photo_url'] != null) {
-          profilePhotoUrl = body['profile_photo_url'];
-        } else if (body['data']?['profile_photo_url'] != null) {
-          profilePhotoUrl = body['data']['profile_photo_url'];
-        } else if (body['url'] != null) {
-          profilePhotoUrl = body['url'];
-        }
+      if (streamedResponse.statusCode == 200 || streamedResponse.statusCode == 201) {
+        // ✅ Ambil 'photo' sesuai $fillable User model
+        final String? photoUrl = body['user']?['photo'] ?? body['photo'];
 
-        debugPrint('Extracted profile photo URL: $profilePhotoUrl');
+        debugPrint('Extracted photo URL: $photoUrl');
 
         if (body['user'] != null) {
+          final userObj = body['user'];
+          final roleData = userObj['role'];
+          final role = roleData is Map
+              ? roleData['name']
+              : savedUser?['role'] ?? 'mahasiswa';
+
           await LocalDbService.saveLogin(
-            email: body['user']['email'] ?? savedUser?['email'] ?? '',
+            email: userObj['email'] ?? savedUser?['email'] ?? '',
             token: token,
-            role: savedUser?['role'] ?? 'mahasiswa',
-            userJson: jsonEncode(body['user']),
+            role: role,
+            userJson: jsonEncode(userObj),
           );
-        } else if (profilePhotoUrl != null) {
+        } else if (photoUrl != null) {
           final currentUserJson = savedUser?['user_json'] as String?;
           if (currentUserJson != null) {
             final user = jsonDecode(currentUserJson);
-            user['profile_photo_url'] = profilePhotoUrl;
+            user['photo'] = photoUrl; // ✅ 'photo' sesuai $fillable
             await LocalDbService.saveLogin(
               email: savedUser?['email'] ?? '',
               token: token,
@@ -432,15 +406,14 @@ class AuthService {
 
         return {
           'success': true,
-          'message': body['message'] ?? 'Gambar berhasil diupload',
+          'message': body['message'] ?? 'Foto berhasil diupload',
           'user': body['user'],
-          'profile_photo_url': profilePhotoUrl,
+          'photo': photoUrl,
         };
       } else {
-        debugPrint('Upload failed with status: ${streamedResponse.statusCode}');
         return {
           'success': false,
-          'message': body['message'] ?? 'Gagal upload gambar',
+          'message': body['message'] ?? 'Gagal upload foto',
           'errors': body['errors'] ?? {},
         };
       }
@@ -448,13 +421,14 @@ class AuthService {
       debugPrint('Error uploading image: $e');
       return {
         'success': false,
-        'message': 'Terjadi kesalahan saat upload gambar.',
+        'message': 'Terjadi kesalahan saat upload foto.',
         'error': e.toString(),
       };
     }
   }
 
   static Future<Map<String, dynamic>> getProfile() async {
+    // ✅ GET /profile sesuai routes
     final url = Uri.parse('$apiBaseUrl/profile');
 
     try {
@@ -480,11 +454,17 @@ class AuthService {
 
       if (response.statusCode == 200) {
         if (body['user'] != null) {
+          final userObj = body['user'];
+          final roleData = userObj['role'];
+          final role = roleData is Map
+              ? roleData['name']
+              : savedUser?['role'] ?? 'mahasiswa';
+
           await LocalDbService.saveLogin(
-            email: body['user']['email'] ?? savedUser?['email'] ?? '',
+            email: userObj['email'] ?? savedUser?['email'] ?? '',
             token: token,
-            role: savedUser?['role'] ?? 'mahasiswa',
-            userJson: jsonEncode(body['user']),
+            role: role,
+            userJson: jsonEncode(userObj),
           );
         }
 

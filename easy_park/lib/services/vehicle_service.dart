@@ -1,729 +1,345 @@
-// vehicle_service.dart
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:io';
 import 'package:easy_park/constants/api_config.dart';
 import 'package:easy_park/services/local_db_service.dart';
-import 'dart:io';
 import 'package:http_parser/http_parser.dart';
 
 class VehicleService {
+
+  static Future<String?> _getToken() async {
+    final savedUser = await LocalDbService.getLogin();
+    return savedUser?['token'] as String?;
+  }
+
+  static Map<String, String> _headers(String token) => {
+    'Authorization': 'Bearer $token',
+    'Accept': 'application/json',
+  };
+
+  static Map<String, dynamic> _noToken() => {
+    'success': false,
+    'message': 'Token tidak ditemukan. Silakan login ulang.',
+  };
+
+  static Map<String, dynamic> _error(Map<String, dynamic> body) => {
+    'success': false,
+    'message': body['message'] ?? 'Terjadi kesalahan.',
+    'errors': body['errors'] ?? {},
+  };
+
+  static Map<String, dynamic> _exception(dynamic e) => {
+    'success': false,
+    'message': 'Error: $e',
+  };
+
   static Future<Map<String, dynamic>> getVehicles() async {
     try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
+      final token = await _getToken();
+      if (token == null) return _noToken();
 
       final response = await http.get(
-        Uri.parse('$apiBaseUrl/my-vehicles'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+        Uri.parse('$apiBaseUrl/vehicles'),
+        headers: _headers(token),
       );
 
-      print(
-          'Debug: getVehicles Response: ${response.statusCode} ${response.body}');
-
+      final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'data': data,
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
+        return {'success': true, 'vehicles': body['vehicles']};
       } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to fetch vehicles: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
+        return _error(body);
       }
     } catch (e) {
-      print('Debug: getVehicles Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicles: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 
-  static Future<Map<String, dynamic>> getVehicleBrands() async {
+  static Future<Map<String, dynamic>> getVehicle(int id) async {
     try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
+      final token = await _getToken();
+      if (token == null) return _noToken();
 
       final response = await http.get(
-        Uri.parse('$apiBaseUrl/vehicle-brands'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+        Uri.parse('$apiBaseUrl/vehicles/$id'),
+        headers: _headers(token),
       );
 
-      print(
-          'Debug: getVehicleBrands Response: ${response.statusCode} ${response.body}');
-
+      final body = jsonDecode(response.body);
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'data': data,
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
+        return {'success': true, 'vehicle': body['vehicle']};
       } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to fetch vehicle brands: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
+        return _error(body);
       }
     } catch (e) {
-      print('Debug: getVehicleBrands Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicle brands: $e',
-        'error': e.toString(),
-      };
-    }
-  }
-
-  static Future<Map<String, dynamic>> getVehicleTypes() async {
-    try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      final response = await http.get(
-        Uri.parse('$apiBaseUrl/vehicle-types'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      print(
-          'Debug: getVehicleTypes Response: ${response.statusCode} ${response.body}');
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'data': data,
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
-      } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to fetch vehicle types: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
-      }
-    } catch (e) {
-      print('Debug: getVehicleTypes Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicle types: $e',
-        'error': e.toString(),
-      };
-    }
-  }
-
-  static Future<Map<String, dynamic>> getVehicleModels(
-      int brandId, int typeId) async {
-    try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      final response = await http.get(
-        Uri.parse(
-            '$apiBaseUrl/vehicle-models?vehicle_brand_id=$brandId&vehicle_type_id=$typeId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      print(
-          'Debug: getVehicleModels Response: ${response.statusCode} ${response.body}');
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'data': data,
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
-      } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to fetch vehicle models: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
-      }
-    } catch (e) {
-      print('Debug: getVehicleModels Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicle models: $e',
-        'error': e.toString(),
-      };
-    }
-  }
-
-  static Future<Map<String, dynamic>> getVehicleBrandsByType(int typeId) async {
-    try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      final response = await http.get(
-        Uri.parse('$apiBaseUrl/vehicle-brands/by-type/$typeId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      print(
-          'Debug: getVehicleBrandsByType Response: ${response.statusCode} ${response.body}');
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'data': data,
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
-      } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to fetch vehicle brands by type: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
-      }
-    } catch (e) {
-      print('Debug: getVehicleBrandsByType Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicle brands by type: $e',
-        'error': e.toString(),
-      };
-    }
-  }
-
-  static Future<Map<String, dynamic>> getVehicleModelsByBrand(
-      int brandId) async {
-    try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      final response = await http.get(
-        Uri.parse('$apiBaseUrl/vehicle-models/by-brand/$brandId'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
-      );
-
-      print(
-          'Debug: getVehicleModelsByBrand Response: ${response.statusCode} ${response.body}');
-
-      if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return {
-          'success': true,
-          'data': data,
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
-      } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to fetch vehicle models by brand: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
-      }
-    } catch (e) {
-      print('Debug: getVehicleModelsByBrand Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicle models by brand: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 
   static Future<Map<String, dynamic>> addVehicle({
+    required int vehicleTypeId,
+    required int vehicleBrandId,
+    int? vehicleModelId,
     required String plateNumber,
-    required int vehicleModelId,
-    File? stnkImage,
+    String? color,
+    File? vehiclePhoto,
+    File? stnkPhoto,
   }) async {
     try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
+      final token = await _getToken();
+      if (token == null) return _noToken();
 
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      print('Debug: Token: $token');
-      print('Debug: Plate Number: $plateNumber');
-      print('Debug: Vehicle Model ID: $vehicleModelId');
-      print('Debug: STNK Image Path: ${stnkImage?.path}');
-
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$apiBaseUrl/my-vehicles'),
+        Uri.parse('$apiBaseUrl/vehicles'),
       );
 
-      request.headers['Authorization'] = 'Bearer $token';
-      request.headers['Accept'] = 'application/json';
+      request.headers.addAll(_headers(token));
+      request.fields['vehicle_type_id'] = vehicleTypeId.toString();
+      request.fields['vehicle_brand_id'] = vehicleBrandId.toString();
+      if (vehicleModelId != null) {
+        request.fields['vehicle_model_id'] = vehicleModelId.toString();
+      }
+      request.fields['plate_number'] = plateNumber.toUpperCase();
+      if (color != null) request.fields['color'] = color;
 
-      request.fields['plate_number'] = plateNumber;
-      request.fields['vehicle_model_id'] = vehicleModelId.toString();
-
-      if (stnkImage != null) {
-        String extension = stnkImage.path.split('.').last.toLowerCase();
-        if (!['jpg', 'jpeg', 'png'].contains(extension)) {
-          return {
-            'success': false,
-            'message':
-                'Invalid image format. Only JPG, JPEG, or PNG are allowed.',
-          };
-        }
-
+      if (vehiclePhoto != null) {
+        final ext = vehiclePhoto.path.split('.').last.toLowerCase();
         request.files.add(await http.MultipartFile.fromPath(
-          'stnk_image',
-          stnkImage.path,
-          contentType:
-              MediaType('image', extension == 'jpg' ? 'jpeg' : extension),
+          'vehicle_photo',
+          vehiclePhoto.path,
+          contentType: MediaType('image', ext == 'jpg' ? 'jpeg' : ext),
         ));
       }
 
-      print('Debug: Request Headers: ${request.headers}');
-      print('Debug: Request Fields: ${request.fields}');
-      print(
-          'Debug: Request Files: ${request.files.map((f) => f.filename).toList()}');
+      if (stnkPhoto != null) {
+        final ext = stnkPhoto.path.split('.').last.toLowerCase();
+        request.files.add(await http.MultipartFile.fromPath(
+          'stnk_photo',
+          stnkPhoto.path,
+          contentType: MediaType('image', ext == 'jpg' ? 'jpeg' : ext),
+        ));
+      }
 
-      final client = http.Client();
-      final streamedResponse = await client.send(request);
+      final streamedResponse = await request.send();
       final responseBody = await streamedResponse.stream.bytesToString();
+      final body = jsonDecode(responseBody);
 
-      print('Debug: Response Status: ${streamedResponse.statusCode}');
-      print('Debug: Response Body: $responseBody');
-
-      if (streamedResponse.statusCode == 201) {
-        try {
-          final data = jsonDecode(responseBody);
-          return {
-            'success': true,
-            'data': data,
-          };
-        } catch (_) {
-          return {
-            'success': true,
-            'data': responseBody,
-            'message': 'Vehicle added, but response is not JSON.',
-          };
-        }
-      } else if (streamedResponse.statusCode == 401 ||
-          streamedResponse.statusCode == 403) {
+      if (streamedResponse.statusCode == 200 || streamedResponse.statusCode == 201) {
         return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token: $responseBody',
-        };
-      } else if (streamedResponse.statusCode == 422) {
-        final body = jsonDecode(responseBody);
-        return {
-          'success': false,
-          'message': body['message'] ?? 'Validation failed',
-          'error': body['errors'] ?? responseBody,
+          'success': true,
+          'message': body['message'] ?? 'Kendaraan berhasil ditambahkan.',
+          'vehicle': body['vehicle'],
         };
       } else {
-        final body = jsonDecode(responseBody);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to add vehicle: ${streamedResponse.statusCode}',
-          'error': body['error'] ?? responseBody,
-        };
+        return _error(body);
       }
     } catch (e) {
-      print('Debug: Exception: $e');
-      return {
-        'success': false,
-        'message': 'Error adding vehicle: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 
   static Future<Map<String, dynamic>> updateVehicle({
     required int vehicleId,
+    required int vehicleTypeId,
+    required int vehicleBrandId,
+    int? vehicleModelId,
     required String plateNumber,
-    required int vehicleModelId,
-    File? stnkImage,
+    String? color,
+    File? vehiclePhoto,
+    File? stnkPhoto,
   }) async {
     try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
+      final token = await _getToken();
+      if (token == null) return _noToken();
 
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      print('Debug: Token: $token');
-      print('Debug: Vehicle ID: $vehicleId');
-      print('Debug: Plate Number: $plateNumber');
-      print('Debug: Vehicle Model ID: $vehicleModelId');
-      print('Debug: STNK Image Path: ${stnkImage?.path}');
-
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
-        Uri.parse('$apiBaseUrl/my-vehicles/$vehicleId'),
+        Uri.parse('$apiBaseUrl/vehicles/$vehicleId'),
       );
 
-      request.headers['Authorization'] = 'Bearer $token';
-      request.headers['Accept'] = 'application/json';
+      request.headers.addAll(_headers(token));
+      request.fields['vehicle_type_id'] = vehicleTypeId.toString();
+      request.fields['vehicle_brand_id'] = vehicleBrandId.toString();
+      if (vehicleModelId != null) {
+        request.fields['vehicle_model_id'] = vehicleModelId.toString();
+      }
+      request.fields['plate_number'] = plateNumber.toUpperCase();
+      if (color != null) request.fields['color'] = color;
 
-      request.fields['plate_number'] = plateNumber;
-      request.fields['vehicle_model_id'] = vehicleModelId.toString();
-
-      if (stnkImage != null) {
-        String extension = stnkImage.path.split('.').last.toLowerCase();
-        if (!['jpg', 'jpeg', 'png'].contains(extension)) {
-          return {
-            'success': false,
-            'message':
-                'Invalid image format. Only JPG, JPEG, or PNG are allowed.',
-          };
-        }
-
+      if (vehiclePhoto != null) {
+        final ext = vehiclePhoto.path.split('.').last.toLowerCase();
         request.files.add(await http.MultipartFile.fromPath(
-          'stnk_image',
-          stnkImage.path,
-          contentType:
-              MediaType('image', extension == 'jpg' ? 'jpeg' : extension),
+          'vehicle_photo',
+          vehiclePhoto.path,
+          contentType: MediaType('image', ext == 'jpg' ? 'jpeg' : ext),
         ));
       }
 
-      print('Debug: Request Headers: ${request.headers}');
-      print('Debug: Request Fields: ${request.fields}');
-      print(
-          'Debug: Request Files: ${request.files.map((f) => f.filename).toList()}');
+      if (stnkPhoto != null) {
+        final ext = stnkPhoto.path.split('.').last.toLowerCase();
+        request.files.add(await http.MultipartFile.fromPath(
+          'stnk_photo',
+          stnkPhoto.path,
+          contentType: MediaType('image', ext == 'jpg' ? 'jpeg' : ext),
+        ));
+      }
 
-      final client = http.Client();
-      final streamedResponse = await client.send(request);
+      final streamedResponse = await request.send();
       final responseBody = await streamedResponse.stream.bytesToString();
-
-      print('Debug: Response Status: ${streamedResponse.statusCode}');
-      print('Debug: Response Body: $responseBody');
+      final body = jsonDecode(responseBody);
 
       if (streamedResponse.statusCode == 200) {
-        try {
-          final data = jsonDecode(responseBody);
-          return {
-            'success': true,
-            'data': data,
-          };
-        } catch (_) {
-          return {
-            'success': true,
-            'data': responseBody,
-            'message': 'Vehicle updated, but response is not JSON.',
-          };
-        }
-      } else if (streamedResponse.statusCode == 401 ||
-          streamedResponse.statusCode == 403) {
         return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token: $responseBody',
-        };
-      } else if (streamedResponse.statusCode == 404) {
-        return {
-          'success': false,
-          'message':
-              'Vehicle not found or you do not have permission to update it',
-          'error': 'Not found',
-        };
-      } else if (streamedResponse.statusCode == 422) {
-        final body = jsonDecode(responseBody);
-        return {
-          'success': false,
-          'message': body['message'] ?? 'Validation failed',
-          'error': body['errors'] ?? responseBody,
+          'success': true,
+          'message': body['message'] ?? 'Kendaraan berhasil diperbarui.',
+          'vehicle': body['vehicle'],
         };
       } else {
-        final body = jsonDecode(responseBody);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to update vehicle: ${streamedResponse.statusCode}',
-          'error': body['error'] ?? responseBody,
-        };
+        return _error(body);
       }
     } catch (e) {
-      print('Debug: Exception: $e');
-      return {
-        'success': false,
-        'message': 'Error updating vehicle: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 
   static Future<Map<String, dynamic>> deleteVehicle(int id) async {
     try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
-
-      print('Debug: Token: $token');
-      print('Debug: Deleting vehicle ID: $id');
+      final token = await _getToken();
+      if (token == null) return _noToken();
 
       final response = await http.delete(
-        Uri.parse('$apiBaseUrl/my-vehicles/$id'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
-        },
+        Uri.parse('$apiBaseUrl/vehicles/$id'),
+        headers: _headers(token),
       );
 
-      print(
-          'Debug: deleteVehicle Response: ${response.statusCode} ${response.body}');
-
-      if (response.statusCode == 204) {
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
         return {
           'success': true,
-          'message': 'Vehicle deleted successfully',
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
-      } else if (response.statusCode == 404) {
-        return {
-          'success': false,
-          'message':
-              'Vehicle not found or you do not have permission to delete it',
-          'error': 'Not found',
+          'message': body['message'] ?? 'Kendaraan berhasil dihapus.',
         };
       } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to delete vehicle: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
+        return _error(body);
       }
     } catch (e) {
-      print('Debug: deleteVehicle Error: $e');
-      return {
-        'success': false,
-        'message': 'Error deleting vehicle: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 
+  static Future<Map<String, dynamic>> getVehicleTypes() async {
+    try {
+      final token = await _getToken();
+      if (token == null) return _noToken();
+
+      final response = await http.get(
+        Uri.parse('$apiBaseUrl/vehicle-types'),
+        headers: _headers(token),
+      );
+
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      } else {
+        return _error(body);
+      }
+    } catch (e) {
+      return _exception(e);
+    }
+  }
+
+  // vehicle_brands tidak punya vehicle_type_id — kembalikan semua brand
+  static Future<Map<String, dynamic>> getVehicleBrandsByType(int typeId) async {
+    try {
+      final token = await _getToken();
+      if (token == null) return _noToken();
+
+      final response = await http.get(
+        Uri.parse('$apiBaseUrl/vehicle-brands/by-type/$typeId'),
+        headers: _headers(token),
+      );
+
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      } else {
+        return _error(body);
+      }
+    } catch (e) {
+      return _exception(e);
+    }
+  }
+
+  static Future<Map<String, dynamic>> getVehicleModelsByBrand(int brandId) async {
+    try {
+      final token = await _getToken();
+      if (token == null) return _noToken();
+
+      final response = await http.get(
+        Uri.parse('$apiBaseUrl/vehicle-models/by-brand/$brandId'),
+        headers: _headers(token),
+      );
+
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': body['data']};
+      } else {
+        return _error(body);
+      }
+    } catch (e) {
+      return _exception(e);
+    }
+  }
+
+  // vehicle_models tidak punya vehicle_type_id — hapus parameter vehicleTypeId
   static Future<Map<String, dynamic>> createVehicleModel({
     required String name,
     required int vehicleBrandId,
-    required int vehicleTypeId,
   }) async {
     try {
-      final savedUser = await LocalDbService.getLogin();
-      final token = savedUser?['token'] as String?;
-
-      if (token == null) {
-        return {
-          'success': false,
-          'message': 'No authentication token found. Please log in again.',
-        };
-      }
+      final token = await _getToken();
+      if (token == null) return _noToken();
 
       final response = await http.post(
         Uri.parse('$apiBaseUrl/vehicle-models'),
         headers: {
-          'Authorization': 'Bearer $token',
-          'Accept': 'application/json',
+          ..._headers(token),
           'Content-Type': 'application/json',
         },
         body: jsonEncode({
           'name': name,
           'vehicle_brand_id': vehicleBrandId,
-          'vehicle_type_id': vehicleTypeId,
         }),
       );
 
-      print(
-          'Debug: createVehicleModel Response: ${response.statusCode} ${response.body}');
-
-      if (response.statusCode == 201) {
-        final data = jsonDecode(response.body);
+      final body = jsonDecode(response.body);
+      if (response.statusCode == 200 || response.statusCode == 201) {
         return {
           'success': true,
-          'data': data['data'],
-          'message': data['message'] ?? 'Vehicle model created successfully',
-        };
-      } else if (response.statusCode == 401 || response.statusCode == 403) {
-        return {
-          'success': false,
-          'message': 'Unauthorized action. Please log in again.',
-          'error': 'Invalid or expired token',
-        };
-      } else if (response.statusCode == 422) {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ?? 'Validation failed',
-          'errors': body['errors'] ?? 'No validation details provided',
+          'message': body['message'] ?? 'Model berhasil dibuat.',
+          'data': body['data'] ?? body,
         };
       } else {
-        final body = jsonDecode(response.body);
-        return {
-          'success': false,
-          'message': body['message'] ??
-              'Failed to create vehicle model: ${response.statusCode}',
-          'error': body['error'] ?? 'No additional error details provided',
-        };
+        return _error(body);
       }
     } catch (e) {
-      print('Debug: createVehicleModel Error: $e');
-      return {
-        'success': false,
-        'message': 'Error creating vehicle model: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 
-  // Alternative method jika backend belum ada endpoint count
   static Future<Map<String, dynamic>> getUserVehicleCount() async {
     try {
-      // Menggunakan method getVehicles() yang sudah ada
-      final vehicleResult = await getVehicles();
-
-      if (vehicleResult['success']) {
-        final List<dynamic> vehicles = vehicleResult['data'] ?? [];
+      final result = await getVehicles();
+      if (result['success']) {
+        final List<dynamic> vehicles = result['vehicles'] ?? [];
         return {
           'success': true,
-          'data': {
-            'count': vehicles.length,
-          },
+          'data': {'count': vehicles.length},
         };
       } else {
-        return {
-          'success': false,
-          'message': vehicleResult['message'] ?? 'Failed to get vehicle count',
-          'error': vehicleResult['error'],
-        };
+        return result;
       }
     } catch (e) {
-      print('Debug: getUserVehicleCount Error: $e');
-      return {
-        'success': false,
-        'message': 'Error fetching vehicle count: $e',
-        'error': e.toString(),
-      };
+      return _exception(e);
     }
   }
 }

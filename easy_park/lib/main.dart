@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart'; // Tambahkan ini
 import 'views/user/login_screen.dart';
 import 'widgets/bottom_navigation.dart';
-import 'views/user/register_screen.dart';
 import 'SplashScreen.dart';
 import 'widgets/Drawer_Navigation.dart';
 import 'package:easy_park/services/local_db_service.dart';

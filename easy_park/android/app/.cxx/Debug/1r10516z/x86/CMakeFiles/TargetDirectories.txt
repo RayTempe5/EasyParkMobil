@@ -1,0 +1,2 @@
+D:/EasyParkMobil/easy_park/android/app/.cxx/Debug/1r10516z/x86/CMakeFiles/edit_cache.dir
+D:/EasyParkMobil/easy_park/android/app/.cxx/Debug/1r10516z/x86/CMakeFiles/rebuild_cache.dir

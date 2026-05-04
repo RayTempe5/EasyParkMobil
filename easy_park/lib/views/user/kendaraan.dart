@@ -1,9 +1,7 @@
-// kendaraan_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'kendaraan_Add.dart';
 import 'package:easy_park/services/vehicle_service.dart';
-import 'qrcode.dart';
 import 'package:easy_park/constants/api_config.dart';
 import 'package:easy_park/services/selected_vehicle.dart';
 import 'package:easy_park/widgets/Bottom_Navigation.dart';
@@ -41,19 +39,20 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
     final result = await VehicleService.getVehicles();
     if (result['success']) {
       setState(() {
-        vehicles = List<Map<String, dynamic>>.from(result['data']);
+        // ✅ key 'vehicles' sesuai response Laravel VehicleController
+        vehicles = List<Map<String, dynamic>>.from(result['vehicles']);
         isLoading = false;
       });
     } else {
       setState(() {
         isLoading = false;
         errorMessage = result['message'];
-        debugPrint(
-            'Fetch vehicles failed: ${result['message']} - ${result['error']}');
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memuat kendaraan: ${result['message']}')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memuat kendaraan: ${result['message']}')),
+        );
+      }
     }
   }
 
@@ -61,22 +60,24 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
     final selected = SelectedVehicle();
     final currentSelected = selected.vehicle;
 
-    // Jika kendaraan yang dihapus adalah yang sedang dipilih, bersihkan dari lokal
     if (currentSelected != null && currentSelected['id'] == id) {
       await selected.clearSelectedVehicle();
-      print('Selected vehicle cleared because it was deleted.');
     }
 
     final result = await VehicleService.deleteVehicle(id);
     if (result['success']) {
       await _fetchVehicles();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kendaraan $name dihapus')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kendaraan $name dihapus')),
+        );
+      }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result['message'])),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(result['message'])),
+        );
+      }
     }
   }
 
@@ -94,19 +95,14 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
               const SizedBox(height: 8),
               Text(
                 'Klik PILIH salah satu kendaraan yang dipakai',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red[400],
-                ),
+                style: TextStyle(fontSize: 12, color: Colors.red[400]),
               ),
               const SizedBox(height: 16),
               Expanded(
                 child: isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : errorMessage != null
-                        ? Center(
-                            child: Text(errorMessage!,
-                                textAlign: TextAlign.center))
+                        ? Center(child: Text(errorMessage!, textAlign: TextAlign.center))
                         : vehicles.isEmpty
                             ? const Center(child: Text('Tidak ada kendaraan'))
                             : _buildVehicleList(),
@@ -132,20 +128,13 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
         ),
         ElevatedButton(
           onPressed: () async {
-            final result = await Navigator.push(
+            await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => const VehicleRegistrationScreen(),
               ),
             );
             await _fetchVehicles();
-            if (result != null) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                    content: Text(
-                        'Kendaraan baru ditambahkan: ${result['plate_number']}')),
-              );
-            }
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF1A1A4B),
@@ -155,10 +144,7 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
           ),
           child: const Text(
             'TAMBAH',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
         ),
       ],
@@ -170,17 +156,19 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
       itemCount: vehicles.length,
       itemBuilder: (context, index) {
         final vehicle = vehicles[index];
-        final model = vehicle['model'];
-        final brand = model?['vehicle_brand'];
-        final type =
-            model?['vehicle_type']; // ← Ubah ini! Bukan dari vehicle_brand
+
+        // ✅ Sesuai response Laravel: load('type', 'brand', 'model')
+        // Relationship langsung di vehicle, bukan nested di model
+        final typeName = vehicle['type']?['name'] ?? 'Unknown Type';
+        final brandName = vehicle['brand']?['name'] ?? 'Unknown Brand';
+        final modelName = vehicle['model']?['name'] ?? 'Unknown Model';
 
         return _buildVehicleCard(
-          name: model?['name'] ?? 'Unknown Model',
+          name: modelName,
           id: vehicle['id'].toString(),
           plateNumber: vehicle['plate_number'] ?? 'Unknown Plate',
-          brand: brand?['name'] ?? 'Unknown Brand',
-          type: type?['name'] ?? 'Unknown Type',
+          brand: brandName,
+          type: typeName,
           vehicle: vehicle,
         );
       },
@@ -195,9 +183,11 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
     required String type,
     required Map<String, dynamic> vehicle,
   }) {
-    final qrCodePath = vehicle['qr_code'] ?? '';
-    final qrCodeUrl =
-    qrCodePath.isNotEmpty ? '$baseUrl/storage/$qrCodePath' : '';
+    // ✅ 'vehicle_photo' sesuai $fillable User model — tidak ada qr_code
+    final vehiclePhotoPath = vehicle['vehicle_photo'] ?? '';
+    final vehiclePhotoUrl = vehiclePhotoPath.isNotEmpty
+        ? '$baseUrl/storage/$vehiclePhotoPath'
+        : '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -231,28 +221,19 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
                     const SizedBox(width: 8),
                     Text(
                       type,
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 14,
-                      ),
+                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   plateNumber,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   brand,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: Colors.grey[600], fontSize: 14),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -267,26 +248,21 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
                                   VehicleEditScreen(vehicle: vehicle),
                             ),
                           );
-                          await _fetchVehicles(); // Refresh vehicle list
-                          if (result != null) {
+                          await _fetchVehicles();
+                          if (result != null && mounted) {
                             final selectedVehicleInstance = SelectedVehicle();
                             final currentSelectedVehicle =
                                 selectedVehicleInstance.vehicle;
                             if (currentSelectedVehicle != null &&
                                 currentSelectedVehicle['id'] == result['id']) {
-                              final updatedQrCodePath = result['qr_code'] ?? '';
-                              final updatedQrCodeUrl =
-                                  updatedQrCodePath.isNotEmpty
-                                      ? '$baseUrl/storage/$updatedQrCodePath'
-                                      : '';
-                              await selectedVehicleInstance.setSelectedVehicle(
-                                  updatedQrCodeUrl, result);
-                              print('Updated SelectedVehicle: $result');
+                              await selectedVehicleInstance
+                                  .setSelectedVehicle(vehiclePhotoUrl, result);
                             }
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                  content: Text(
-                                      'Kendaraan diperbarui: ${result['plate_number']}')),
+                                content: Text(
+                                    'Kendaraan diperbarui: ${result['plate_number']}'),
+                              ),
                             );
                           }
                         },
@@ -303,15 +279,16 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
                         onPressed: selectedVehicleId == vehicle['id']
                             ? null
                             : () {
-                                SelectedVehicle()
-                                    .setSelectedVehicle(qrCodeUrl, vehicle);
+                                SelectedVehicle().setSelectedVehicle(
+                                    vehiclePhotoUrl, vehicle);
                                 setState(() {
                                   selectedVehicleId = vehicle['id'];
                                 });
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                      content: Text(
-                                          'Selected: $name ($plateNumber)')),
+                                    content: Text(
+                                        'Selected: $name ($plateNumber)'),
+                                  ),
                                 );
                                 Navigator.of(context).pushAndRemoveUntil(
                                   MaterialPageRoute(
@@ -389,10 +366,7 @@ class _KendaraanScreenState extends State<KendaraanScreen> {
       'assets/trash.svg',
       width: 25,
       height: 25,
-      colorFilter: const ColorFilter.mode(
-        Colors.red,
-        BlendMode.srcIn,
-      ),
+      colorFilter: const ColorFilter.mode(Colors.red, BlendMode.srcIn),
     );
   }
 }
