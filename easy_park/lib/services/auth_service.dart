@@ -442,6 +442,69 @@ class AuthService {
     }
   }
 
+  static Future<Map<String, dynamic>> uploadFacePhoto(File imageFile) async {
+  final url = Uri.parse('$apiBaseUrl/profile/face');
+
+  try {
+    final savedUser = await LocalDbService.getLogin();
+    final token = savedUser?['token'] as String?;
+    if (token == null) {
+      return {'success': false, 'message': 'Tidak ada token. Silakan login ulang.'};
+    }
+
+    final fileSize = await imageFile.length();
+    if (fileSize > 5 * 1024 * 1024) {
+      return {'success': false, 'message': 'Ukuran file terlalu besar (maksimum 5MB).'};
+    }
+
+    final request = http.MultipartRequest('POST', url)
+      ..headers.addAll({
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      })
+      ..files.add(await http.MultipartFile.fromPath(
+        'face_photo',
+        imageFile.path,
+        filename: path.basename(imageFile.path),
+      ));
+
+    final streamedResponse = await request.send();
+    final responseBody = await streamedResponse.stream.bytesToString();
+    final body = jsonDecode(responseBody);
+
+    debugPrint('Face upload status: ${streamedResponse.statusCode}');
+    debugPrint('Face upload body: $responseBody');
+
+    if (streamedResponse.statusCode == 200 || streamedResponse.statusCode == 201) {
+      if (body['user'] != null) {
+        final userObj = body['user'];
+        final roleData = userObj['role'];
+        final role = roleData is Map ? roleData['name'] : savedUser?['role'] ?? 'mahasiswa';
+        await LocalDbService.saveLogin(
+          email: userObj['email'] ?? savedUser?['email'] ?? '',
+          token: token,
+          role: role,
+          userJson: jsonEncode(userObj),
+        );
+      }
+      return {
+        'success': true,
+        'message': body['message'] ?? 'Wajah berhasil didaftarkan',
+        'user': body['user'],
+      };
+    } else {
+      return {
+        'success': false,
+        'message': body['message'] ?? 'Gagal mendaftarkan wajah',
+        'errors': body['errors'] ?? {},
+      };
+    }
+  } catch (e) {
+    debugPrint('Error uploading face: $e');
+    return {'success': false, 'message': 'Terjadi kesalahan saat upload wajah.'};
+  }
+}
+
   static Future<Map<String, dynamic>> getProfile() async {
     // ✅ GET /profile sesuai routes
     final url = Uri.parse('$apiBaseUrl/profile');

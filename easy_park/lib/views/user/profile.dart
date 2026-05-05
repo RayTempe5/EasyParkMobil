@@ -8,6 +8,7 @@ import 'package:easy_park/views/user/login_screen.dart';
 import 'package:easy_park/services/auth_service.dart';
 import 'package:easy_park/constants/api_config.dart';
 import 'package:easy_park/services/local_db_service.dart';
+import 'package:easy_park/views/user/face_enrollment_screen.dart'; // sesuaikan path
 
 class Profile extends StatefulWidget {
   const Profile({Key? key}) : super(key: key);
@@ -17,15 +18,13 @@ class Profile extends StatefulWidget {
 }
 
 class _ProfileState extends State<Profile> {
-  // Controllers — field names sesuai Laravel ProfileController
-  final TextEditingController _nameController = TextEditingController();       // name
-  final TextEditingController _emailController = TextEditingController();      // email
-  final TextEditingController _phoneController = TextEditingController();      // phone
-  final TextEditingController _nimNipController = TextEditingController();     // nim_nip
-  final TextEditingController _addressController = TextEditingController();    // address
-  final TextEditingController _birthDateController = TextEditingController();  // birth_date
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _nimNipController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _birthDateController = TextEditingController();
 
-  // Gender: 'L' atau 'P' — sesuai validasi Laravel 'in:L,P'
   String? _selectedGender;
   final List<Map<String, String>> _genderOptions = [
     {'value': 'L', 'label': 'Laki-laki'},
@@ -36,7 +35,8 @@ class _ProfileState extends State<Profile> {
 
   String _displayName = 'User';
   String _displayEmail = 'user@example.com';
-  String? _profilePhotoUrl; // sesuai field 'photo' di Laravel
+  String? _profilePhotoUrl;
+  String? _facePhotoUrl; // ✅ tambahan
 
   @override
   void initState() {
@@ -53,16 +53,16 @@ class _ProfileState extends State<Profile> {
         setState(() {
           _displayName = user['name'] ?? 'User';
           _displayEmail = user['email'] ?? 'user@example.com';
-          _profilePhotoUrl = user['photo']; // 'photo' sesuai Laravel
+          _profilePhotoUrl = user['photo'];
+          _facePhotoUrl = user['face_photo']; // ✅ tambahan
 
           _nameController.text = user['name'] ?? '';
           _emailController.text = user['email'] ?? '';
-          _phoneController.text = user['phone'] ?? '';       // 'phone' bukan 'phone_number'
-          _nimNipController.text = user['nim_nip'] ?? '';    // 'nim_nip' bukan 'nim'
+          _phoneController.text = user['phone'] ?? '';
+          _nimNipController.text = user['nim_nip'] ?? '';
           _addressController.text = user['address'] ?? '';
-          _selectedGender = user['gender'];                  // 'L' atau 'P'
+          _selectedGender = user['gender'];
 
-          // 'birth_date' bukan 'date_of_birth' — format dari backend: YYYY-MM-DD
           if (user['birth_date'] != null && user['birth_date'].isNotEmpty) {
             try {
               DateTime dateTime = DateTime.parse(user['birth_date']);
@@ -175,7 +175,6 @@ class _ProfileState extends State<Profile> {
     final address = _addressController.text.trim();
     final birthDate = _birthDateController.text.trim();
 
-    // Validasi sesuai rules Laravel
     if (name.isEmpty) {
       _showSnackBar('Nama tidak boleh kosong', isError: true);
       return;
@@ -184,7 +183,6 @@ class _ProfileState extends State<Profile> {
       _showSnackBar('Nama maksimal 255 karakter', isError: true);
       return;
     }
-
     if (email.isEmpty) {
       _showSnackBar('Email tidak boleh kosong', isError: true);
       return;
@@ -193,28 +191,21 @@ class _ProfileState extends State<Profile> {
       _showSnackBar('Format email tidak valid', isError: true);
       return;
     }
-
-    // phone: max 20 karakter — sesuai Laravel 'max:20'
     if (phone.isNotEmpty) {
       if (!RegExp(r'^\+?[0-9]{8,20}$').hasMatch(phone)) {
         _showSnackBar('Nomor telepon harus 8-20 digit angka', isError: true);
         return;
       }
     }
-
-    // nim_nip: max 50 karakter — sesuai Laravel 'max:50'
     if (nimNip.isNotEmpty && nimNip.length > 50) {
       _showSnackBar('NIM/NIP maksimal 50 karakter', isError: true);
       return;
     }
-
-    // address: max 500 karakter — sesuai Laravel 'max:500'
     if (address.isNotEmpty && address.length > 500) {
       _showSnackBar('Alamat maksimal 500 karakter', isError: true);
       return;
     }
 
-    // birth_date: validasi format DD-MM-YYYY
     String? backendBirthDate;
     if (birthDate.isNotEmpty) {
       try {
@@ -228,7 +219,6 @@ class _ProfileState extends State<Profile> {
         if (date.isAfter(DateTime.now()) || date.year < 1900) {
           throw Exception('Invalid date range');
         }
-        // Konversi ke YYYY-MM-DD untuk backend
         backendBirthDate = '${parts[2]}-${parts[1]}-${parts[0]}';
       } catch (e) {
         _showSnackBar('Format tanggal tidak valid (DD-MM-YYYY)', isError: true);
@@ -242,10 +232,10 @@ class _ProfileState extends State<Profile> {
       final result = await AuthService.updateProfile(
         name: name,
         email: email,
-        phone: phone.isNotEmpty ? phone : null,         // 'phone' bukan 'phone_number'
-        nimNip: nimNip.isNotEmpty ? nimNip : null,       // 'nim_nip' bukan 'nim'
-        gender: _selectedGender,                         // 'L' atau 'P'
-        birthDate: backendBirthDate,                     // 'birth_date' bukan 'date_of_birth'
+        phone: phone.isNotEmpty ? phone : null,
+        nimNip: nimNip.isNotEmpty ? nimNip : null,
+        gender: _selectedGender,
+        birthDate: backendBirthDate,
         address: address.isNotEmpty ? address : null,
       );
 
@@ -255,7 +245,7 @@ class _ProfileState extends State<Profile> {
           if (result['success']) {
             _displayName = name;
             _displayEmail = email;
-            _profilePhotoUrl = result['user']['photo']; // 'photo' bukan 'image'
+            _profilePhotoUrl = result['user']['photo'];
           }
         });
 
@@ -294,7 +284,6 @@ class _ProfileState extends State<Profile> {
         File imageFile = File(pickedFile.path);
         setState(() => _isLoading = true);
 
-        // Upload sebagai 'photo' — sesuai validasi Laravel 'mimes:jpg,jpeg,png' 'max:2048'
         final result = await AuthService.uploadProfileImage(imageFile);
 
         if (mounted) {
@@ -305,7 +294,6 @@ class _ProfileState extends State<Profile> {
           );
 
           if (result['success']) {
-            // Ambil 'photo' bukan 'image'
             final String? newPhotoUrl =
                 result['user']?['photo'] ?? result['photo'];
 
@@ -313,7 +301,7 @@ class _ProfileState extends State<Profile> {
               final savedUser = await LocalDbService.getLogin();
               if (savedUser != null) {
                 final user = jsonDecode(savedUser['user_json'] as String);
-                user['photo'] = newPhotoUrl; // simpan sebagai 'photo'
+                user['photo'] = newPhotoUrl;
                 await LocalDbService.saveLogin(
                   email: savedUser['email'] as String,
                   token: savedUser['token'] as String,
@@ -411,10 +399,13 @@ class _ProfileState extends State<Profile> {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasFace = _facePhotoUrl != null && _facePhotoUrl!.isNotEmpty;
+
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
       body: Stack(
         children: [
+          // Background gradient header
           Container(
             height: MediaQuery.of(context).size.height * 0.35,
             decoration: const BoxDecoration(
@@ -430,6 +421,7 @@ class _ProfileState extends State<Profile> {
             ),
           ),
 
+          // ✅ Tombol logout — pojok kiri atas
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             left: 16,
@@ -442,8 +434,62 @@ class _ProfileState extends State<Profile> {
               child: TextButton.icon(
                 onPressed: () async => await _handleLogout(context),
                 icon: const Icon(Icons.logout, color: Colors.white, size: 18),
-                label: const Text('Log out',
-                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500)),
+                label: const Text(
+                  'Log out',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+              ),
+            ),
+          ),
+
+          // ✅ Tombol daftarkan wajah — pojok kanan atas
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hasFace
+                      ? Colors.greenAccent.withOpacity(0.6)
+                      : Colors.white.withOpacity(0.3),
+                ),
+              ),
+              child: TextButton.icon(
+                onPressed: _isLoading
+                    ? null
+                    : () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const FaceEnrollmentScreen(),
+                          ),
+                        );
+                        if (result == true) await _loadUserData();
+                      },
+                icon: Icon(
+                  hasFace ? Icons.face : Icons.face_retouching_off,
+                  color: hasFace ? Colors.greenAccent : Colors.white,
+                  size: 18,
+                ),
+                label: Text(
+                  hasFace ? 'Wajah ✓' : 'Daftarkan\nWajah',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: hasFace ? Colors.greenAccent : Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
+                ),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 ),
@@ -454,6 +500,7 @@ class _ProfileState extends State<Profile> {
           SafeArea(
             child: Column(
               children: [
+                // Header section
                 Container(
                   padding: const EdgeInsets.symmetric(vertical: 30),
                   child: Column(
@@ -478,31 +525,40 @@ class _ProfileState extends State<Profile> {
                                 ],
                               ),
                               child: ClipOval(
-                                child: _profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty
+                                child: _profilePhotoUrl != null &&
+                                        _profilePhotoUrl!.isNotEmpty
                                     ? Image.network(
                                         _buildPhotoUrl(_profilePhotoUrl),
                                         fit: BoxFit.cover,
                                         width: 90,
                                         height: 90,
-                                        loadingBuilder: (context, child, progress) {
+                                        loadingBuilder:
+                                            (context, child, progress) {
                                           if (progress == null) return child;
                                           return const Center(
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF130160)),
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                      Color(0xFF130160)),
                                             ),
                                           );
                                         },
-                                        errorBuilder: (context, error, stackTrace) {
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
                                           return Container(
                                             padding: const EdgeInsets.all(20),
-                                            child: SvgPicture.asset('assets/profile.svg', fit: BoxFit.cover),
+                                            child: SvgPicture.asset(
+                                                'assets/profile.svg',
+                                                fit: BoxFit.cover),
                                           );
                                         },
                                       )
                                     : Container(
                                         padding: const EdgeInsets.all(20),
-                                        child: SvgPicture.asset('assets/profile.svg', fit: BoxFit.cover),
+                                        child: SvgPicture.asset(
+                                            'assets/profile.svg',
+                                            fit: BoxFit.cover),
                                       ),
                               ),
                             ),
@@ -514,9 +570,11 @@ class _ProfileState extends State<Profile> {
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF130160),
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  border:
+                                      Border.all(color: Colors.white, width: 2),
                                 ),
-                                child: const Icon(Icons.edit, color: Colors.white, size: 16),
+                                child: const Icon(Icons.edit,
+                                    color: Colors.white, size: 16),
                               ),
                             ),
                           ],
@@ -526,31 +584,39 @@ class _ProfileState extends State<Profile> {
                       Text(
                         _displayName,
                         style: const TextStyle(
-                          color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         _displayEmail,
-                        style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 14),
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.9), fontSize: 14),
                       ),
                       const SizedBox(height: 16),
                       Container(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
-                          border: Border.all(color: Colors.white.withOpacity(0.3)),
+                          border: Border.all(
+                              color: Colors.white.withOpacity(0.3)),
                         ),
                         child: ElevatedButton.icon(
-                          onPressed: _isLoading ? null : _showImageSourceOptions,
+                          onPressed:
+                              _isLoading ? null : _showImageSourceOptions,
                           icon: const Icon(Icons.camera_alt, size: 18),
                           label: const Text('Edit foto profil',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                              style: TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w500)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white.withOpacity(0.2),
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(25)),
                           ),
                         ),
                       ),
@@ -558,6 +624,7 @@ class _ProfileState extends State<Profile> {
                   ),
                 ),
 
+                // Form section
                 Expanded(
                   child: Container(
                     width: double.infinity,
@@ -572,34 +639,36 @@ class _ProfileState extends State<Profile> {
                       padding: const EdgeInsets.all(24),
                       child: ListView(
                         children: [
-                          // name — required di Laravel
-                          _buildTextField('Nama', _nameController, 'Masukkan nama', required: true),
+                          _buildTextField('Nama', _nameController,
+                              'Masukkan nama',
+                              required: true),
                           const SizedBox(height: 20),
 
-                          // email — required di Laravel
-                          _buildTextField('Email', _emailController, 'Masukkan email', required: true),
+                          _buildTextField('Email', _emailController,
+                              'Masukkan email',
+                              required: true),
                           const SizedBox(height: 20),
 
-                          // phone — nullable, max:20
-                          _buildTextField('No Telepon', _phoneController, '+62 812 3456 7890'),
+                          _buildTextField('No Telepon', _phoneController,
+                              '+62 812 3456 7890'),
                           const SizedBox(height: 20),
 
-                          // nim_nip — nullable, max:50, unique
-                          _buildTextField('NIM / NIP', _nimNipController, 'Masukkan NIM atau NIP'),
+                          _buildTextField('NIM / NIP', _nimNipController,
+                              'Masukkan NIM atau NIP'),
                           const SizedBox(height: 20),
 
-                          // gender — nullable, in:L,P
                           _buildGenderField(),
                           const SizedBox(height: 20),
 
-                          // birth_date — nullable, date (YYYY-MM-DD ke backend)
-                          _buildDateField('Tanggal Lahir', _birthDateController, '01-01-1990'),
+                          _buildDateField('Tanggal Lahir',
+                              _birthDateController, '01-01-1990'),
                           const SizedBox(height: 20),
 
-                          // address — nullable, max:500
-                          _buildTextField('Alamat', _addressController, 'Masukkan alamat'),
+                          _buildTextField(
+                              'Alamat', _addressController, 'Masukkan alamat'),
                           const SizedBox(height: 30),
 
+                          // Tombol perbarui profil
                           Container(
                             width: double.infinity,
                             height: 54,
@@ -612,14 +681,16 @@ class _ProfileState extends State<Profile> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF130160).withOpacity(0.3),
+                                  color:
+                                      const Color(0xFF130160).withOpacity(0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 ),
                               ],
                             ),
                             child: ElevatedButton(
-                              onPressed: _isLoading ? null : _handleUpdateProfile,
+                              onPressed:
+                                  _isLoading ? null : _handleUpdateProfile,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.transparent,
                                 shadowColor: Colors.transparent,
@@ -632,7 +703,8 @@ class _ProfileState extends State<Profile> {
                                       width: 24,
                                       height: 24,
                                       child: CircularProgressIndicator(
-                                        color: Colors.white, strokeWidth: 2,
+                                        color: Colors.white,
+                                        strokeWidth: 2,
                                       ),
                                     )
                                   : const Text(
@@ -673,9 +745,12 @@ class _ProfileState extends State<Profile> {
           children: [
             Text(label,
                 style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black)),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black)),
             if (required)
-              const Text(' *', style: TextStyle(color: Colors.red, fontSize: 15)),
+              const Text(' *',
+                  style: TextStyle(color: Colors.red, fontSize: 15)),
           ],
         ),
         const SizedBox(height: 8),
@@ -704,13 +779,15 @@ class _ProfileState extends State<Profile> {
     );
   }
 
-  // Gender dropdown — sesuai validasi Laravel 'in:L,P'
   Widget _buildGenderField() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Jenis Kelamin',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black)),
+            style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.black)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
           value: _selectedGender,
@@ -750,7 +827,9 @@ class _ProfileState extends State<Profile> {
       children: [
         Text(label,
             style: const TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black)),
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.black)),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () => _selectDate(context),
@@ -759,7 +838,8 @@ class _ProfileState extends State<Profile> {
               controller: controller,
               decoration: InputDecoration(
                 hintText: placeholder,
-                hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                hintStyle:
+                    TextStyle(color: Colors.grey.shade400, fontSize: 14),
                 suffixIcon: const Icon(Icons.calendar_today,
                     color: Color(0xFF130160), size: 20),
                 filled: true,
