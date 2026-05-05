@@ -329,7 +329,7 @@ class AuthService {
   // Tidak ada endpoint terpisah di routes — pakai profile/update
   static Future<Map<String, dynamic>> uploadProfileImage(File imageFile) async {
     debugPrint('Starting profile image upload...');
-    final url = Uri.parse('$apiBaseUrl/profile/update'); // ✅ sesuai routes
+    final url = Uri.parse('$apiBaseUrl/profile/update');
 
     try {
       final savedUser = await LocalDbService.getLogin();
@@ -341,7 +341,21 @@ class AuthService {
         };
       }
 
-      // ✅ max:2048 KB = 2MB sesuai validasi ProfileController
+      // Ambil data user dari local storage
+      final userJson = savedUser?['user_json'] as String?;
+      final userData = userJson != null ? jsonDecode(userJson) : {};
+
+      // Validasi name & email tersedia
+      final userName = userData['name'] as String? ?? '';
+      final userEmail = userData['email'] as String? ?? '';
+      if (userName.isEmpty || userEmail.isEmpty) {
+        return {
+          'success': false,
+          'message': 'Data user tidak lengkap. Silakan login ulang.',
+        };
+      }
+
+      // max:2048 KB = 2MB sesuai validasi ProfileController
       final fileSize = await imageFile.length();
       if (fileSize > 2 * 1024 * 1024) {
         return {
@@ -355,9 +369,12 @@ class AuthService {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
         })
+        // ✅ Field wajib sesuai validasi Laravel (required)
+        ..fields['name'] = userName
+        ..fields['email'] = userEmail
         ..files.add(
           await http.MultipartFile.fromPath(
-            'photo', // ✅ 'photo' sesuai validasi ProfileController
+            'photo',
             imageFile.path,
             filename: path.basename(imageFile.path),
           ),
@@ -372,9 +389,7 @@ class AuthService {
       final body = jsonDecode(responseBody);
 
       if (streamedResponse.statusCode == 200 || streamedResponse.statusCode == 201) {
-        // ✅ Ambil 'photo' sesuai $fillable User model
         final String? photoUrl = body['user']?['photo'] ?? body['photo'];
-
         debugPrint('Extracted photo URL: $photoUrl');
 
         if (body['user'] != null) {
@@ -394,7 +409,7 @@ class AuthService {
           final currentUserJson = savedUser?['user_json'] as String?;
           if (currentUserJson != null) {
             final user = jsonDecode(currentUserJson);
-            user['photo'] = photoUrl; // ✅ 'photo' sesuai $fillable
+            user['photo'] = photoUrl;
             await LocalDbService.saveLogin(
               email: savedUser?['email'] ?? '',
               token: token,
