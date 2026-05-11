@@ -10,7 +10,7 @@ class ParkingRecord {
   final String time;
   final String status;
   final String plate;
-  final DateTime dateTime; // Tambahkan untuk sorting
+  final DateTime dateTime;
 
   ParkingRecord({
     required this.vehicle,
@@ -20,7 +20,6 @@ class ParkingRecord {
     required this.dateTime,
   });
 
-  // Factory untuk record masuk
   factory ParkingRecord.fromRawJsonEntry(Map<String, dynamic> json) {
     String rawTime = json['entry_time'] ?? '';
     String formattedTime = '';
@@ -28,15 +27,15 @@ class ParkingRecord {
 
     if (rawTime.isNotEmpty) {
       try {
-        dateTime = DateTime.parse(rawTime);
-        formattedTime = DateFormat.Hm('id_ID').format(dateTime);
+        dateTime = DateTime.parse(rawTime).toLocal();
+        formattedTime = DateFormat('HH:mm', 'id_ID').format(dateTime);
       } catch (e) {
         formattedTime = '';
       }
     }
 
     return ParkingRecord(
-      vehicle: json['vehicle_type_name'] ?? '',
+      vehicle: json['vehicle_type_name'] ?? '-',
       time: formattedTime,
       status: 'Masuk',
       plate: json['plate_number'] ?? '',
@@ -44,7 +43,6 @@ class ParkingRecord {
     );
   }
 
-  // Factory untuk record keluar
   factory ParkingRecord.fromRawJsonExit(Map<String, dynamic> json) {
     String rawTime = json['exit_time'] ?? '';
     String formattedTime = '';
@@ -52,15 +50,15 @@ class ParkingRecord {
 
     if (rawTime.isNotEmpty) {
       try {
-        dateTime = DateTime.parse(rawTime);
-        formattedTime = DateFormat.Hm('id_ID').format(dateTime);
+        dateTime = DateTime.parse(rawTime).toLocal();
+        formattedTime = DateFormat('HH:mm', 'id_ID').format(dateTime);
       } catch (e) {
         formattedTime = '';
       }
     }
 
     return ParkingRecord(
-      vehicle: json['vehicle_type_name'] ?? '',
+      vehicle: json['vehicle_type_name'] ?? '-',
       time: formattedTime,
       status: 'Keluar',
       plate: json['plate_number'] ?? '',
@@ -73,12 +71,18 @@ class ParkingHistorySection {
   final DateTime date;
   final List<ParkingRecord> records;
 
-  ParkingHistorySection({
-    required this.date,
-    required this.records,
-  });
+  ParkingHistorySection({required this.date, required this.records});
 
-  String get formattedDate => DateFormat('d MMM', 'id_ID').format(date);
+  String get formattedDate {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final sectionDay = DateTime(date.year, date.month, date.day);
+
+    if (sectionDay == today) return 'Hari Ini';
+    if (sectionDay == yesterday) return 'Kemarin';
+    return DateFormat('d MMMM yyyy', 'id_ID').format(date);
+  }
 }
 
 class Histori extends StatefulWidget {
@@ -90,312 +94,516 @@ class Histori extends StatefulWidget {
 
 class _HistoriState extends State<Histori> {
   bool isLoading = true;
-  String? _token;
   List<ParkingHistorySection> historyList = [];
   String? errorMessage;
   DateTime? _selectedDate;
 
+  static const _primary = Color(0xFF1D1540);
+  static const _accent  = Color(0xFF4F3CC9);
+
   @override
   void initState() {
     super.initState();
-    _loadTokenAndFetchData();
+    _loadData();
   }
 
-  Future<void> _loadTokenAndFetchData() async {
+  Future<void> _loadData() async {
+    setState(() { isLoading = true; errorMessage = null; });
     try {
-      final savedLogin = await LocalDbService.getLogin();
-      final token = savedLogin?['token'];
-
-      if (token != null) {
-        setState(() {
-          _token = token;
-        });
-        await fetchParkingHistory(token);
-      } else {
-        setState(() {
-          errorMessage = 'Token tidak ditemukan';
-          isLoading = false;
-        });
+      final saved = await LocalDbService.getLogin();
+      final token = saved?['token'];
+      if (token == null) {
+        setState(() { errorMessage = 'Token tidak ditemukan'; isLoading = false; });
+        return;
       }
+      await _fetchHistory(token);
     } catch (e) {
-      setState(() {
-        errorMessage = 'Gagal mengambil token: $e';
-        isLoading = false;
-      });
+      setState(() { errorMessage = 'Gagal: $e'; isLoading = false; });
     }
   }
 
-  Future<void> fetchParkingHistory(String token) async {
+  Future<void> _fetchHistory(String token) async {
     try {
-      final response = await http.get(
+      final res = await http.get(
         Uri.parse('$apiBaseUrl/parking-records/history'),
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
         },
       ).timeout(const Duration(seconds: 10));
 
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-
-        // Map dengan DateTime key
-        Map<DateTime, List<ParkingRecord>> grouped = {};
-        
-        // List untuk menampung semua record
-        List<ParkingRecord> allRecords = [];
+      if (res.statusCode == 200) {
+        final List<dynamic> data = json.decode(res.body);
+        final List<ParkingRecord> all = [];
 
         for (var item in data) {
-          // Buat record untuk entry jika ada entry_time
           if (item['entry_time'] != null && item['entry_time'].toString().isNotEmpty) {
-            try {
-              ParkingRecord entryRecord = ParkingRecord.fromRawJsonEntry(item);
-              allRecords.add(entryRecord);
-            } catch (e) {
-              print('Error parsing entry record: $e');
-            }
+            try { all.add(ParkingRecord.fromRawJsonEntry(item)); } catch (_) {}
           }
-
-          // Buat record untuk exit jika ada exit_time
           if (item['exit_time'] != null && item['exit_time'].toString().isNotEmpty) {
-            try {
-              ParkingRecord exitRecord = ParkingRecord.fromRawJsonExit(item);
-              allRecords.add(exitRecord);
-            } catch (e) {
-              print('Error parsing exit record: $e');
-            }
+            try { all.add(ParkingRecord.fromRawJsonExit(item)); } catch (_) {}
           }
         }
 
-        // Group by date
-        for (var record in allRecords) {
-          DateTime dateOnly = DateTime(record.dateTime.year, record.dateTime.month, record.dateTime.day);
-          
-          if (!grouped.containsKey(dateOnly)) {
-            grouped[dateOnly] = [];
-          }
-          grouped[dateOnly]!.add(record);
+        final Map<DateTime, List<ParkingRecord>> grouped = {};
+        for (var r in all) {
+          final d = DateTime(r.dateTime.year, r.dateTime.month, r.dateTime.day);
+          grouped.putIfAbsent(d, () => []).add(r);
         }
 
-        // Sort records dalam setiap section berdasarkan waktu (descending)
-        grouped.forEach((date, records) {
-          records.sort((a, b) => b.dateTime.compareTo(a.dateTime));
-        });
+        grouped.forEach((_, records) => records.sort((a, b) => b.dateTime.compareTo(a.dateTime)));
 
-        // Ubah map menjadi list of ParkingHistorySection
-        List<ParkingHistorySection> sections = grouped.entries.map((entry) {
-          return ParkingHistorySection(date: entry.key, records: entry.value);
-        }).toList();
+        final sections = grouped.entries
+            .map((e) => ParkingHistorySection(date: e.key, records: e.value))
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
 
-        // Urutkan sections dari tanggal terbaru ke terlama
-        sections.sort((a, b) => b.date.compareTo(a.date));
-
-        setState(() {
-          historyList = sections;
-          isLoading = false;
-          errorMessage = null;
-        });
+        setState(() { historyList = sections; isLoading = false; });
       } else {
-        setState(() {
-          errorMessage = 'Gagal mengambil data. Status code: ${response.statusCode}';
-          isLoading = false;
-        });
+        setState(() { errorMessage = 'Gagal memuat data (${res.statusCode})'; isLoading = false; });
       }
     } catch (e) {
-      setState(() {
-        errorMessage = 'Error saat mengambil data: $e';
-        isLoading = false;
-      });
+      setState(() { errorMessage = 'Koneksi gagal: $e'; isLoading = false; });
     }
   }
 
   Future<void> _pickDate() async {
-    DateTime now = DateTime.now();
-    final DateTime? picked = await showDatePicker(
+    final now = DateTime.now();
+    final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate ?? now,
       firstDate: DateTime(now.year - 2),
       lastDate: DateTime(now.year + 1),
       locale: const Locale('id', 'ID'),
+      builder: (ctx, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(primary: _primary),
+        ),
+        child: child!,
+      ),
     );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  Widget _buildDateSection(DateTime date) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        DateFormat('d MMM', 'id_ID').format(date),
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black54,
-          fontSize: 16,
-        ),
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _selectedDate == null
+        ? historyList
+        : historyList.where((s) {
+            final d = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+            return s.date == d;
+          }).toList();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6FB),
+      body: CustomScrollView(
+        slivers: [
+          // ── App Bar ──
+          SliverAppBar(
+            expandedHeight: 140,
+            pinned: true,
+            backgroundColor: _primary,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+              title: const Text(
+                'Riwayat Parkir',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [_primary, _accent],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -30, top: -30,
+                      child: Container(
+                        width: 160, height: 160,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.06),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      right: 40, top: 20,
+                      child: Container(
+                        width: 80, height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.06),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Filter Bar ──
+          SliverToBoxAdapter(
+            child: Container(
+              color: _primary,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF4F6FB),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _pickDate,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _selectedDate != null
+                                  ? _accent.withOpacity(0.4)
+                                  : Colors.grey.shade200,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.calendar_today_rounded,
+                                  size: 16,
+                                  color: _selectedDate != null ? _accent : Colors.grey.shade500),
+                              const SizedBox(width: 8),
+                              Text(
+                                _selectedDate == null
+                                    ? 'Filter tanggal'
+                                    : DateFormat('d MMMM yyyy', 'id_ID').format(_selectedDate!),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: _selectedDate != null ? _primary : Colors.grey.shade500,
+                                  fontWeight: _selectedDate != null
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_selectedDate != null) ...[
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => setState(() => _selectedDate = null),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.red.shade100),
+                          ),
+                          child: Icon(Icons.close_rounded,
+                              size: 16, color: Colors.red.shade400),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: _loadData,
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: _accent.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.refresh_rounded,
+                            size: 16, color: _accent),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Content ──
+          if (isLoading)
+            const SliverFillRemaining(
+              child: Center(
+                child: CircularProgressIndicator(color: _accent),
+              ),
+            )
+          else if (errorMessage != null)
+            SliverFillRemaining(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.wifi_off_rounded,
+                            size: 36, color: Colors.red.shade300),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(errorMessage!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: _loadData,
+                        icon: const Icon(Icons.refresh_rounded, size: 16),
+                        label: const Text('Coba Lagi'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else if (filtered.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.history_rounded,
+                          size: 40, color: Colors.grey.shade400),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _selectedDate != null
+                          ? 'Tidak ada riwayat\npada tanggal ini'
+                          : 'Belum ada riwayat parkir',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) {
+                    final section = filtered[i];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 4, height: 16,
+                                decoration: BoxDecoration(
+                                  color: _accent,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                section.formattedDate,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: _primary,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: _accent.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(100),
+                                ),
+                                child: Text(
+                                  '${section.records.length} aktivitas',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: _accent,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...section.records.map(_buildCard).toList(),
+                      ],
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildHistoryCard(ParkingRecord record) {
-    bool isMasuk = record.status.toLowerCase() == 'masuk';
+  Widget _buildCard(ParkingRecord record) {
+    final isMasuk = record.status == 'Masuk';
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 10,
-            spreadRadius: 2,
-            offset: const Offset(0, 4),
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: isMasuk ? Colors.greenAccent : Colors.redAccent,
-            child: Icon(
-              isMasuk ? Icons.arrow_downward : Icons.arrow_upward,
-              color: Colors.white,
-              size: 20,
+          // ── Color bar kiri ──
+          Container(
+            width: 4,
+            height: 72,
+            decoration: BoxDecoration(
+              color: isMasuk ? const Color(0xFF12B76A) : const Color(0xFFEF4444),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                bottomLeft: Radius.circular(16),
+              ),
             ),
           ),
-          const SizedBox(width: 16),
+
+          // ── Icon ──
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 14),
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: isMasuk
+                  ? const Color(0xFF12B76A).withOpacity(0.1)
+                  : const Color(0xFFEF4444).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              isMasuk ? Icons.login_rounded : Icons.logout_rounded,
+              size: 20,
+              color: isMasuk
+                  ? const Color(0xFF12B76A)
+                  : const Color(0xFFEF4444),
+            ),
+          ),
+
+          // ── Info ──
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record.vehicle,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(record.time),
-                    const Text(' · '),
-                    Text(
-                      record.status,
-                      style: TextStyle(
-                        color: isMasuk ? Colors.green : Colors.red,
-                        fontWeight: FontWeight.bold,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        record.plate,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: _primary,
+                          letterSpacing: 0.5,
+                          fontFamily: 'monospace',
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  record.plate,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isMasuk
+                              ? const Color(0xFF12B76A).withOpacity(0.1)
+                              : const Color(0xFFEF4444).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(100),
+                        ),
+                        child: Text(
+                          record.status,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: isMasuk
+                                ? const Color(0xFF12B76A)
+                                : const Color(0xFFEF4444),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 4),
+                  Text(
+                    record.vehicle.isEmpty ? 'Tidak terdaftar' : record.vehicle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Waktu ──
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Text(
+              record.time,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: _primary,
+                fontFamily: 'monospace',
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredHistory = _selectedDate == null
-        ? historyList
-        : historyList.where((section) {
-            final sectionDate = section.date;
-            final selectedDateOnly = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
-            return sectionDate.year == selectedDateOnly.year &&
-                sectionDate.month == selectedDateOnly.month &&
-                sectionDate.day == selectedDateOnly.day;
-          }).toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Histori'),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        foregroundColor: const Color(0xFF1D1540),
-      ),
-      backgroundColor: Colors.white,
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : errorMessage != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(errorMessage!),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () => _loadTokenAndFetchData(),
-                        child: const Text('Coba Lagi'),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    Row(
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _pickDate,
-                          icon: const Icon(Icons.calendar_today),
-                          label: Text(
-                            _selectedDate == null
-                                ? 'Pilih Tanggal'
-                                : DateFormat('d MMMM yyyy', 'id_ID').format(_selectedDate!),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            backgroundColor: const Color(0xFF1D1540),
-                          ),
-                        ),
-                        if (_selectedDate != null)
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () {
-                              setState(() {
-                                _selectedDate = null;
-                              });
-                            },
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    if (filteredHistory.isEmpty)
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(32.0),
-                          child: Text(
-                            'Tidak ada data history',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      ...filteredHistory.map((section) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildDateSection(section.date),
-                            ...section.records.map(_buildHistoryCard).toList(),
-                          ],
-                        );
-                      }).toList(),
-                  ],
-                ),
     );
   }
 }

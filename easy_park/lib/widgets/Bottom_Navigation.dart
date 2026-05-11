@@ -2,17 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:easy_park/views/user/beranda.dart';
 import 'package:easy_park/views/user/kendaraan.dart';
-import 'package:easy_park/views/user/qrcode.dart';
 import 'package:easy_park/views/user/histori.dart';
 import 'package:easy_park/views/user/profile.dart';
-import 'package:easy_park/services/selected_vehicle.dart';
 
 class BottomNavigationWidget extends StatefulWidget {
   final int initialTab;
-
-  const BottomNavigationWidget({Key? key, this.initialTab = 0})
-      : super(key: key);
-
+  const BottomNavigationWidget({Key? key, this.initialTab = 0}) : super(key: key);
   @override
   _BottomNavigationWidgetState createState() => _BottomNavigationWidgetState();
 }
@@ -20,142 +15,107 @@ class BottomNavigationWidget extends StatefulWidget {
 class _BottomNavigationWidgetState extends State<BottomNavigationWidget> {
   late int _selectedIndex;
 
-  late Future<void> _loadFuture;
-
-  Widget _buildQRCodePage() {
-  return FutureBuilder(
-    future: _loadFuture,
-    builder: (context, snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      return const QRCode(); // ✅ tanpa parameter
-    },
-  );
-}
-
+  static const _primary = Color(0xFF1A1A4B);
+  static const _accent  = Color(0xFF4A3AFF);
 
   final List<Widget> _pages = [
     const Beranda(),
     const KendaraanScreen(),
-    const Placeholder(), // Will be replaced by _buildQRCodePage dynamically
     const Histori(),
     const Profile(),
+  ];
+
+  final _items = [
+    {'icon': 'assets/beranda.svg',   'label': 'Beranda'},
+    {'icon': 'assets/kendaraan.svg', 'label': 'Kendaraan'},
+    {'icon': 'assets/histori.svg',   'label': 'Histori'},
+    {'icon': 'assets/profile.svg',   'label': 'Profil'},
   ];
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialTab;
-    _loadFuture = SelectedVehicle().loadSelectedVehicle();
-  }
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  Widget _buildMiddleTabItem() {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A237E),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: IconButton(
-        icon: SvgPicture.asset(
-          'assets/qrcode.svg',
-          width: 28,
-          height: 28,
-          colorFilter: const ColorFilter.mode(Colors.white, BlendMode.srcIn),
-        ),
-        onPressed: () {
-          setState(() {
-            _selectedIndex = 2;
-          });
-        },
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _selectedIndex == 2 ? _buildQRCodePage() : _pages[_selectedIndex],
-      bottomNavigationBar: Stack(
-        alignment: Alignment.bottomCenter,
-        children: [
-          BottomAppBar(
-            shape: const CircularNotchedRectangle(),
-            notchMargin: 8,
-            color: Colors.white,
-            elevation: 10,
-            child: Container(
-              height: 60,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: _buildNavItem(0, 'assets/beranda.svg', 'Beranda')),
-                  Expanded(
-                      child: _buildNavItem(
-                          1, 'assets/kendaraan.svg', 'Kendaraan')),
-                  const SizedBox(width: 56),
-                  Expanded(
-                      child: _buildNavItem(3, 'assets/histori.svg', 'Histori')),
-                  Expanded(
-                      child: _buildNavItem(4, 'assets/profile.svg', 'Profile')),
-                ],
-              ),
+      body: _pages[_selectedIndex],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: List.generate(_items.length, (i) => Expanded(
+                child: _buildNavItem(i),
+              )),
             ),
           ),
-          Positioned(
-            bottom: 25,
-            child: _buildMiddleTabItem(),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, String iconPath, String label) {
-    bool isSelected = _selectedIndex == index;
+  Widget _buildNavItem(int index) {
+    final isSelected = _selectedIndex == index;
+    final item = _items[index];
 
-    return InkWell(
-      onTap: () => _onItemTapped(index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SvgPicture.asset(
-            iconPath,
-            width: 27,
-            height: 27,
-            colorFilter: ColorFilter.mode(
-              isSelected ? Colors.black : Colors.grey,
-              BlendMode.srcIn,
+    return GestureDetector(
+      onTap: () => setState(() => _selectedIndex = index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? _accent.withOpacity(0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: isSelected ? 36 : 28,
+              height: isSelected ? 36 : 28,
+              decoration: BoxDecoration(
+                color: isSelected ? _accent : Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                child: SvgPicture.asset(
+                  item['icon']!,
+                  width: isSelected ? 18 : 22,
+                  height: isSelected ? 18 : 22,
+                  colorFilter: ColorFilter.mode(
+                    isSelected ? Colors.white : Colors.grey.shade400,
+                    BlendMode.srcIn,
+                  ),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isSelected ? Colors.black : Colors.grey,
+            const SizedBox(height: 4),
+            AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w400,
+                color: isSelected ? _accent : Colors.grey.shade400,
+              ),
+              child: Text(item['label']!, overflow: TextOverflow.ellipsis),
             ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

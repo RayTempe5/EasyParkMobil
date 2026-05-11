@@ -10,495 +10,389 @@ import 'package:easy_park/services/local_db_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  bool _obscureText = true;
-  bool _isSubmitting = false;
+  final _emailCtrl    = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _formKey      = GlobalKey<FormState>();
 
-  // State variables to track field status
-  bool _emailHasError = false;
-  bool _passwordHasError = false;
-  String _emailErrorText = '';
-  String _passwordErrorText = '';
+  bool _obscure      = true;
+  bool _submitting   = false;
+  bool _emailErr     = false;
+  bool _passErr      = false;
+  String _emailErrTxt = '';
+  String _passErrTxt  = '';
+
+  static const _primary = Color(0xFF1A1A4B);
+  static const _accent  = Color(0xFF4A3AFF);
+  static const _orange  = Color(0xFFFF9228);
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
     super.dispose();
   }
 
-  // Email validation
-  bool _isValidEmail(String email) {
-    final emailRegExp =
-        RegExp(r'^[a-zA-Z0-9.+_-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
-    return emailRegExp.hasMatch(email);
-  }
+  bool _validEmail(String e) =>
+      RegExp(r'^[a-zA-Z0-9.+_-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$').hasMatch(e);
 
-  // Password validation (min 6 chars with at least 1 number)
-  bool _isValidPassword(String password) {
-    return password.length >= 6 && password.contains(RegExp(r'[0-9]'));
-  }
+  void _checkEmail(String v) => setState(() {
+    if (v.isEmpty)        { _emailErr = true;  _emailErrTxt = 'Email tidak boleh kosong'; }
+    else if (!_validEmail(v)) { _emailErr = true; _emailErrTxt = 'Format email tidak valid'; }
+    else                  { _emailErr = false; _emailErrTxt = ''; }
+  });
 
-  // Show a snackbar message
-  void _showSnackBar(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w500),
-        ),
-        backgroundColor: isError ? Colors.red : const Color(0xFF3D09D9),
+  void _checkPass(String v) => setState(() {
+    if (v.isEmpty)      { _passErr = true; _passErrTxt = 'Password tidak boleh kosong'; }
+    else if (v.length < 6)  { _passErr = true; _passErrTxt = 'Password minimal 6 karakter'; }
+    else if (!v.contains(RegExp(r'[0-9]'))) { _passErr = true; _passErrTxt = 'Harus mengandung minimal 1 angka'; }
+    else                { _passErr = false; _passErrTxt = ''; }
+  });
+
+  void _snack(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(msg, style: GoogleFonts.dmSans(fontSize: 14,
+            fontWeight: FontWeight.w500)),
+        backgroundColor: isError ? Colors.red.shade600 : Colors.green.shade600,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+      ));
   }
 
-  // Validate email field on change and update UI accordingly
-  void _validateEmail(String value) {
-    setState(() {
-      if (value.isEmpty) {
-        _emailHasError = true;
-        _emailErrorText = 'Email tidak boleh kosong';
-      } else if (!_isValidEmail(value)) {
-        _emailHasError = true;
-        _emailErrorText = 'Format email tidak valid';
-      } else {
-        _emailHasError = false;
-        _emailErrorText = '';
-      }
-    });
-  }
-
-  // Validate password field on change and update UI accordingly
-  void _validatePassword(String value) {
-    setState(() {
-      if (value.isEmpty) {
-        _passwordHasError = true;
-        _passwordErrorText = 'Password tidak boleh kosong';
-      } else if (value.length < 6) {
-        _passwordHasError = true;
-        _passwordErrorText = 'Password minimal 6 karakter';
-      } else if (!value.contains(RegExp(r'[0-9]'))) {
-        _passwordHasError = true;
-        _passwordErrorText = 'Password harus mengandung minimal 1 angka';
-      } else {
-        _passwordHasError = false;
-        _passwordErrorText = '';
-      }
-    });
-  }
-
-  // Full form validation and login process
   Future<void> _login() async {
-    // Validate both fields on button press
-    _validateEmail(_emailController.text);
-    _validatePassword(_passwordController.text);
+    _checkEmail(_emailCtrl.text);
+    _checkPass(_passwordCtrl.text);
+    if (_emailErr || _passErr) { _snack('Perbaiki kesalahan pada form', isError: true); return; }
 
-    // If any field has errors, stop the login process
-    if (_emailHasError || _passwordHasError) {
-      _showSnackBar('Harap perbaiki kesalahan pada form', isError: true);
-      return;
-    }
-
-    // Show loading state
-    setState(() {
-      _isSubmitting = true;
-    });
-
+    setState(() => _submitting = true);
     try {
-      // Call AuthService.login to perform API login
-      final result = await AuthService.login(
-        _emailController.text,
-        _passwordController.text,
-      );
-
-      debugPrint('Login result: $result');
-
-      if (result['success']) {
-        // Show API-provided notification
-        _showSnackBar(result['message']);
-
-        // Get redirect_to and role
+      final result = await AuthService.login(_emailCtrl.text, _passwordCtrl.text);
+      if (result['success'] == true) {
+        _snack(result['message'] ?? 'Login berhasil');
+        final role       = result['role'];
         final redirectTo = result['redirect_to'];
-        final role = result['role'];
-        debugPrint('Redirect to: $redirectTo, Role: $role');
 
-        // Validate role
-        if (!['mahasiswa', 'petugas', 'admin'].contains(role)) {
-          _showSnackBar('Role tidak valid: $role', isError: true);
-          setState(() {
-            _isSubmitting = false;
-          });
-          return;
-        }
+        await LocalDbService.saveLogin(
+          email: _emailCtrl.text,
+          token: result['token'],
+          role: role,
+          userJson: jsonEncode(result['user']),
+        );
 
-        // Simpan ke SQLite
-        try {
-          await LocalDbService.saveLogin(
-            email: _emailController.text,
-            token: result['token'],
-            role: role,
-            userJson: jsonEncode(result['user']),
-          );
-          debugPrint('Saved to LocalDbService: email=${_emailController.text}, role=$role');
-        } catch (e) {
-          _showSnackBar('Gagal menyimpan data login: $e', isError: true);
-          setState(() {
-            _isSubmitting = false;
-          });
-          return;
-        }
+        Widget? target;
+        if (redirectTo == 'Bottom_Navigation') target = const BottomNavigationWidget();
+        else if (redirectTo == 'petugasHome')  target = const DrawerNavigationwidget();
+        else { _snack('Redirect tidak valid', isError: true); return; }
 
-        // Map redirect_to to navigation target
-        Widget? targetPage;
-        if (redirectTo == 'Bottom_Navigation') {
-          targetPage = const BottomNavigationWidget();
-        } else if (redirectTo == 'petugasHome') {
-          targetPage = const DrawerNavigationwidget();
-        } else if (redirectTo == 'adminHome') {
-          // Handle admin case (no AdminHomeWidget in Flutter)
-          _showSnackBar('Admin dashboard not available in mobile app', isError: true);
-          setState(() {
-            _isSubmitting = false;
-          });
-          return;
-        } else {
-          _showSnackBar('Redirect tidak valid: $redirectTo', isError: true);
-          setState(() {
-            _isSubmitting = false;
-          });
-          return;
-        }
-
-        // Navigate after a delay to ensure snackbar is visible
-        await Future.delayed(const Duration(seconds: 3));
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => targetPage!),
-          );
-        }
+        await Future.delayed(const Duration(seconds: 2));
+        if (mounted) Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => target!));
       } else {
-        _showSnackBar(result['message'], isError: true);
+        _snack(result['message'] ?? 'Login gagal', isError: true);
       }
     } catch (e) {
-      _showSnackBar('Terjadi kesalahan: ${e.toString()}', isError: true);
+      _snack('Terjadi kesalahan: $e', isError: true);
     } finally {
-      // Hide loading state
-      setState(() {
-        _isSubmitting = false;
-      });
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+
     return Scaffold(
       backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // SVG Logo in top-left corner
-                  Align(
-                    alignment: Alignment.topLeft,
-                    child: Transform.translate(
-                      offset: const Offset(-25, 0),
-                      child: SvgPicture.asset(
-                        'assets/easy.svg',
-                        height: 40,
-                        width: 40,
-                      ),
-                    ),
-                  ),
+      body: SingleChildScrollView(
+        child: Column(children: [
+          // ── Header area ──
+          Container(
+            height: h * 0.36,
+            width: double.infinity,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [_primary, Color(0xFF3A2EA8)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Stack(children: [
+              // decorative circles
+              Positioned(right: -40, top: -40,
+                  child: _circle(200, Colors.white.withOpacity(0.05))),
+              Positioned(left: -20, bottom: 20,
+                  child: _circle(130, Colors.white.withOpacity(0.05))),
+              Positioned(right: 60, top: 60,
+                  child: _circle(70, Colors.white.withOpacity(0.07))),
 
-                  const SizedBox(height: 50),
-
-                  // Header
-                  Center(
-                    child: Text(
-                      'Masuk',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0D0140),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Subheader
-                  Center(
-                    child: Text(
-                      'Ayo parkirkan kendaraan anda lebih aman\nbersama kami',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.dmSans(
-                        fontSize: 14,
-                        color: const Color(0xFF524B6B),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 48),
-
-                  // Email Label
-                  Text(
-                    'Email',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF0D0140),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Email Input with validation
-                  TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    onChanged: _validateEmail,
-                    decoration: InputDecoration(
-                      hintText: 'Brandonkelious@gmail.com',
-                      hintStyle: GoogleFonts.dmSans(color: Colors.grey[400]),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color:
-                              _emailHasError ? Colors.red : Colors.grey[200]!,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color:
-                              _emailHasError ? Colors.red : Colors.grey[300]!,
-                        ),
-                      ),
-                      // Show error icon if there's an error
-                      suffixIcon: _emailHasError
-                          ? const Icon(Icons.error, color: Colors.red)
-                          : _emailController.text.isNotEmpty
-                              ? const Icon(Icons.check_circle,
-                                  color: Colors.green)
-                              : null,
-                      // Show error message
-                      errorText: _emailHasError ? _emailErrorText : null,
-                      errorStyle: GoogleFonts.dmSans(
-                        color: Colors.red,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Password Label
-                  Text(
-                    'Password',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF0D0140),
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  // Password Input with validation
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscureText,
-                    onChanged: _validatePassword,
-                    decoration: InputDecoration(
-                      hintText: 'password123',
-                      hintStyle: GoogleFonts.dmSans(color: Colors.grey[400]),
-                      filled: true,
-                      fillColor: Colors.grey[50],
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 16),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: _passwordHasError
-                              ? Colors.red
-                              : Colors.grey[200]!,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: _passwordHasError
-                              ? Colors.red
-                              : Colors.grey[300]!,
-                        ),
-                      ),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Show validation icon if password entered
-                          if (_passwordController.text.isNotEmpty)
-                            Icon(
-                              _passwordHasError
-                                  ? Icons.error
-                                  : Icons.check_circle,
-                              color:
-                                  _passwordHasError ? Colors.red : Colors.green,
-                            ),
-                          // Show/hide password toggle
-                          IconButton(
-                            icon: Icon(
-                              _obscureText
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: Colors.grey[600],
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscureText = !_obscureText;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                      // Show error message
-                      errorText: _passwordHasError ? _passwordErrorText : null,
-                      errorStyle: GoogleFonts.dmSans(
-                        color: Colors.red,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Forgot Password
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const ForgotPasswordScreen(),
-                          ),
-                        );
-                      },
-                      style: TextButton.styleFrom(
-                        minimumSize: Size.zero,
-                        padding: EdgeInsets.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        'Lupa Password?',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 12,
-                          color: const Color(0xFF0D0140),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Login Button with loading state
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _login,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF3D09D9),
-                        disabledBackgroundColor: Colors.grey,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
-                              ),
-                            )
-                          : Text(
-                              'MASUK',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // Don't have an account
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(28, 16, 28, 0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Anda belum mempunyai akun? ',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 14,
-                          color: Colors.grey,
+                      // Logo
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(14),
                         ),
+                        child: SvgPicture.asset('assets/easy.svg',
+                            height: 28, width: 28),
                       ),
-                      GestureDetector(
-                        onTap: () {
-                      
-                        },
-                        child: Text(
-                          'Daftar',
+                      const Spacer(),
+
+                      Text('Selamat Datang',
                           style: GoogleFonts.dmSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFFFF9228),
-                            decoration: TextDecoration.underline,
-                            decorationThickness: 1.0,
-                            decorationColor: const Color(0xFFFF9228),
-                          ),
-                        ),
-                      ),
+                            fontSize: 13,
+                            color: Colors.white.withOpacity(0.65),
+                            letterSpacing: 0.5,
+                          )),
+                      const SizedBox(height: 4),
+                      Text('Masuk ke EasyPark',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          )),
+                      const SizedBox(height: 8),
+                      Text('Parkirkan kendaraanmu lebih aman\nbersama kami',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 13,
+                            color: Colors.white.withOpacity(0.65),
+                            height: 1.5,
+                          )),
+                      const SizedBox(height: 28),
                     ],
                   ),
-                ],
+                ),
+              ),
+            ]),
+          ),
+
+          // ── Form area ──
+          Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(28),
+                topRight: Radius.circular(28),
+              ),
+            ),
+            transform: Matrix4.translationValues(0, -24, 0),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Email ──
+                    _label('Email'),
+                    const SizedBox(height: 8),
+                    _inputField(
+                      controller: _emailCtrl,
+                      hint: 'contoh@email.com',
+                      icon: Icons.email_outlined,
+                      hasError: _emailErr,
+                      errorText: _emailErrTxt,
+                      onChanged: _checkEmail,
+                      keyboard: TextInputType.emailAddress,
+                      showCheck: !_emailErr && _emailCtrl.text.isNotEmpty,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ── Password ──
+                    _label('Password'),
+                    const SizedBox(height: 8),
+                    _inputField(
+                      controller: _passwordCtrl,
+                      hint: 'Minimal 6 karakter + angka',
+                      icon: Icons.lock_outline_rounded,
+                      hasError: _passErr,
+                      errorText: _passErrTxt,
+                      onChanged: _checkPass,
+                      obscure: _obscure,
+                      showCheck: !_passErr && _passwordCtrl.text.isNotEmpty,
+                      suffix: IconButton(
+                        icon: Icon(
+                          _obscure ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          size: 18,
+                          color: Colors.grey.shade500,
+                        ),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ── Forgot password ──
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: () => Navigator.push(context,
+                            MaterialPageRoute(
+                                builder: (_) => const ForgotPasswordScreen())),
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text('Lupa Password?',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 12,
+                              color: _accent,
+                              fontWeight: FontWeight.w600,
+                            )),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+
+                    // ── Login button ──
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _submitting ? null : _login,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _accent,
+                          disabledBackgroundColor: Colors.grey.shade300,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          elevation: 4,
+                          shadowColor: _accent.withOpacity(0.4),
+                        ),
+                        child: _submitting
+                            ? const SizedBox(width: 22, height: 22,
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2.5))
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.login_rounded,
+                                      size: 18, color: Colors.white),
+                                  const SizedBox(width: 8),
+                                  Text('MASUK',
+                                      style: GoogleFonts.dmSans(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        letterSpacing: 0.5,
+                                      )),
+                                ],
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
           ),
-        ),
+        ]),
       ),
     );
   }
+
+  Widget _label(String text) => Text(text,
+      style: GoogleFonts.dmSans(
+          fontSize: 13, fontWeight: FontWeight.w600, color: _primary));
+
+  Widget _inputField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    required bool hasError,
+    required String errorText,
+    required ValueChanged<String> onChanged,
+    TextInputType keyboard = TextInputType.text,
+    bool obscure = false,
+    bool showCheck = false,
+    Widget? suffix,
+  }) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Container(
+        decoration: BoxDecoration(
+          color: hasError ? Colors.red.shade50 : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: hasError
+                ? Colors.red.shade300
+                : showCheck
+                    ? Colors.green.shade300
+                    : Colors.grey.shade200,
+            width: 1.5,
+          ),
+        ),
+        child: Row(children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 14),
+            child: Icon(icon, size: 18,
+                color: hasError ? Colors.red.shade400
+                    : showCheck ? Colors.green.shade500
+                    : Colors.grey.shade500),
+          ),
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              keyboardType: keyboard,
+              obscureText: obscure,
+              onChanged: onChanged,
+              style: GoogleFonts.dmSans(fontSize: 14, color: _primary),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: GoogleFonts.dmSans(
+                    color: Colors.grey.shade400, fontSize: 13),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 14),
+              ),
+            ),
+          ),
+          if (showCheck && suffix == null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Icon(Icons.check_circle_rounded,
+                  size: 18, color: Colors.green.shade500),
+            ),
+          if (hasError && suffix == null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Icon(Icons.error_rounded,
+                  size: 18, color: Colors.red.shade400),
+            ),
+          if (suffix != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: suffix,
+            ),
+        ]),
+      ),
+      if (hasError)
+        Padding(
+          padding: const EdgeInsets.only(top: 6, left: 4),
+          child: Row(children: [
+            Icon(Icons.info_outline_rounded,
+                size: 12, color: Colors.red.shade400),
+            const SizedBox(width: 4),
+            Text(errorText,
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: Colors.red.shade500)),
+          ]),
+        ),
+    ]);
+  }
+
+  Widget _circle(double size, Color color) => Container(
+    width: size, height: size,
+    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+  );
 }
