@@ -129,7 +129,6 @@ class _HistoriState extends State<Histori> {
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         },
       ).timeout(const Duration(seconds: 10));
 

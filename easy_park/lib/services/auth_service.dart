@@ -24,7 +24,6 @@ class AuthService {
       final response = await http.post(
         url,
         headers: {
-          'ngrok-skip-browser-warning': 'true',
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -75,7 +74,6 @@ class AuthService {
       final response = await http.post(
         Uri.parse('$apiBaseUrl/login'),
         headers: {
-          'ngrok-skip-browser-warning': 'true',
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
@@ -134,7 +132,6 @@ class AuthService {
         await http.post(
           Uri.parse('$apiBaseUrl/logout'), // POST /api/logout sesuai routes
           headers: {
-            'ngrok-skip-browser-warning': 'true',
             'Authorization': 'Bearer $token',
             'Accept': 'application/json',
           },
@@ -172,7 +169,6 @@ class AuthService {
       final response = await http.get(
         Uri.parse('$apiBaseUrl/me'),
         headers: {
-          'ngrok-skip-browser-warning': 'true',
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
         },
@@ -280,7 +276,6 @@ class AuthService {
       final response = await http.post( // ✅ POST sesuai routes
         url,
         headers: {
-          'ngrok-skip-browser-warning': 'true',
           'Content-Type': 'application/json',
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
@@ -373,7 +368,6 @@ class AuthService {
         ..headers.addAll({
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         })
         // ✅ Field wajib sesuai validasi Laravel (required)
         ..fields['name'] = userName
@@ -465,7 +459,6 @@ class AuthService {
 
     final request = http.MultipartRequest('POST', url)
       ..headers.addAll({
-        'ngrok-skip-browser-warning': 'true',
         'Authorization': 'Bearer $token',
         'Accept': 'application/json',
       })
@@ -529,7 +522,6 @@ class AuthService {
       final response = await http.get(
         url,
         headers: {
-          'ngrok-skip-browser-warning': 'true',
           'Accept': 'application/json',
           'Authorization': 'Bearer $token',
         },

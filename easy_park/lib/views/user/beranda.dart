@@ -58,7 +58,6 @@ class _BerandaState extends State<Beranda> {
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         },
       ).timeout(const Duration(seconds: 10));
 
@@ -93,7 +92,6 @@ class _BerandaState extends State<Beranda> {
         headers: {
           'Authorization': 'Bearer $token',
           'Accept': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
         },
       ).timeout(const Duration(seconds: 10));
 
